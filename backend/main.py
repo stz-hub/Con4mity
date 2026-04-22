@@ -13,6 +13,7 @@ import asyncio
 import csv
 import io
 import json
+import logging
 import os
 import time
 from collections import Counter
@@ -48,6 +49,8 @@ from log_normalization import (
     pick_timestamp_raw,
     ui_envelope,
 )
+
+logger = logging.getLogger("con4mity")
 
 # --- Config ---
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-dev-only")
@@ -353,7 +356,7 @@ def _top_alert_rules_from_db(limit: int = 5) -> list[dict[str, Any]]:
                 SELECT COALESCE(rule_name, '—') AS rule_name, COUNT(*)::int AS c
                 FROM alerts
                 WHERE created_at >= NOW() - INTERVAL '30 days'
-                GROUP BY 1
+                GROUP BY COALESCE(rule_name, '—')
                 ORDER BY c DESC
                 LIMIT %s
                 """,
@@ -827,8 +830,24 @@ def get_stats(user: dict = Depends(require_user)):
 
 @api.get("/overview")
 def get_overview(user: dict = Depends(require_user)):
-    """Vue synthétique : stats PG + agrégations légères sur un échantillon de logs (Pi-friendly)."""
-    stats = _stats_from_db()
+    """
+    Vue synthétique : stats PG + agrégations légères sur un échantillon de logs (Pi-friendly).
+    Chaque sous-brique est isolée : une panne (PG, OS, requête SQL) ne renvoie plus tout le bloc en 500.
+    """
+    empty_stats: dict[str, int] = {
+        "new_alerts": 0,
+        "in_progress_alerts": 0,
+        "resolved_alerts": 0,
+        "total_alerts": 0,
+        "incidents_open": 0,
+        "critical_open": 0,
+    }
+    try:
+        stats = _stats_from_db()
+    except Exception as e:
+        logger.exception("overview: stats PG failed: %s", e)
+        stats = empty_stats
+
     docs: list[dict[str, Any]] = []
     try:
         body = {
@@ -842,15 +861,37 @@ def get_overview(user: dict = Depends(require_user)):
         response = os_client.search(index=OS_LOGS_INDEX, body=body)
         hits = response.get("hits", {}).get("hits", [])
         docs = [h.get("_source") or {} for h in hits]
-    except Exception:
+    except Exception as e:
+        logger.exception("overview: OpenSearch sample failed: %s", e)
         docs = []
 
     timeline, top_hosts = _aggregate_logs_overview(docs, hours=24)
     events_24h = len(docs)
     recent_rate = sum(b["count"] for b in timeline[-3:]) if timeline else 0
     top_source_ips = aggregate_top_ips(docs, limit=5)
-    vol24 = _opensearch_volume_24h()
-    top_rules = _top_alert_rules_from_db(5)
+
+    try:
+        vol24 = _opensearch_volume_24h()
+    except Exception as e:
+        logger.exception("overview: volume_24h failed: %s", e)
+        vol24 = []
+
+    try:
+        top_rules = _top_alert_rules_from_db(5)
+    except Exception as e:
+        logger.exception("overview: top_alert_rules failed: %s", e)
+        top_rules = []
+
+    try:
+        services = _os_cluster_services()
+    except Exception as e:
+        logger.exception("overview: services check failed: %s", e)
+        services = {
+            "opensearch": {"ok": False, "error": str(e)[:200]},
+            "postgresql": {"ok": False},
+            "filebeat": {"ok": None, "detail": "unavailable"},
+        }
+
     return {
         "stats": stats,
         "timeline": timeline,
@@ -858,7 +899,7 @@ def get_overview(user: dict = Depends(require_user)):
         "top_source_ips": top_source_ips,
         "top_alert_rules": top_rules,
         "log_volume_24h": vol24,
-        "services": _os_cluster_services(),
+        "services": services,
         "events_sampled": events_24h,
         "activity_recent_count": recent_rate,
         "map_hint": "top_hosts",

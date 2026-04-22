@@ -70,7 +70,25 @@ async function apiGet(path, params) {
         : "Session expired or not authenticated";
     throw new Error(msg);
   }
-  if (!r.ok) throw new Error((await r.text()) || r.statusText);
+  if (!r.ok) {
+    const raw = (await r.text()) || r.statusText;
+    const err = new Error();
+    const ct = r.headers.get("content-type") || "";
+    if (ct.includes("application/json")) {
+      try {
+        const j = JSON.parse(raw);
+        err.message =
+          (Array.isArray(j.detail) ? j.detail.map((d) => d.msg || d).join(" ") : j.detail) ||
+          raw ||
+          r.statusText;
+      } catch (_) {
+        err.message = raw || r.statusText;
+      }
+    } else {
+      err.message = (raw && raw.slice(0, 500)) || r.statusText;
+    }
+    throw err;
+  }
   return r.json();
 }
 
