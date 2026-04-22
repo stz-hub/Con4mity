@@ -1,0 +1,176 @@
+﻿CON4MITY
+SIEM Open Source pour PME
+RAYAN POTTERAT
+Dashboard & Backend
+CT 103 · 192.168.0.103
+OTERIA · Promo 2025-2026
+
+
+Contexte du projet
+Con4mity est un SIEM open source pour PME. Le Pi 5 (8 Go RAM) fait tourner tous les services. La brique de Rayan est celle que le client verra et utilisera au quotidien - c'est l'interface entre le système et l'humain.
+
+Rôle de Rayan
+Les autres membres de l'équipe collectent, stockent et analysent les données. Rayan développe l'interface qui rend tout ça utilisable par quelqu'un qui n'est pas expert en cybersécurité. Un client PME ne va pas ouvrir un terminal pour interroger OpenSearch - il veut ouvrir son navigateur et voir immédiatement si quelque chose se passe sur son réseau.
+L'inspiration vient d'outils professionnels comme SentinelOne, NinjaOne ou Salesforce : une interface moderne, claire, avec une vue des événements en temps réel, des alertes visibles d'un coup d'oeil, et la possibilité d'agir directement depuis l'interface (acquitter une alerte, voir les détails d'un incident).
+Architecture technique : Rayan développe un backend FastAPI (Python) qui interroge OpenSearch pour les logs et PostgreSQL pour les alertes, et expose une API REST. Un frontend (page web) appelle cette API pour afficher les données. Ce n'est pas OpenSearch Dashboards - c'est un vrai développement custom.
+OpenSearch Dashboards sera utilisé temporairement pendant le dev pour que l'équipe puisse visualiser les logs pendant que le vrai dashboard est développé. Mais la cible finale c'est le dashboard custom.
+
+Architecture du dashboard
+Composant
+Rôle
+Frontend (HTML/CSS/JS)
+L'interface que l'utilisateur voit dans son navigateur
+Backend FastAPI
+Serveur Python qui reçoit les requêtes du frontend et interroge les bases
+OpenSearch
+Source des logs - le backend interroge 192.168.0.101:9200
+PostgreSQL
+Source des alertes et utilisateurs - le backend interroge 192.168.0.104:5432
+OpenSearch Dashboards
+Outil temporaire pour le dev - remplacé par le dashboard custom
+
+Accès et informations
+Information
+Valeur
+CT Proxmox
+CT 103
+IP du CT
+192.168.0.103
+Accès Proxmox
+https://con4mity.duckdns.org:33000
+Login Proxmox
+Rayan ou rayan@pve - choisir pve dans le menu Realm
+Mot de passe Proxmox
+Rayan@@@
+Accès au CT
+Dans Proxmox : cliquer sur CT 103 → Console, ou Shell → pct enter 103
+Dossier projet
+/opt/con4mity/
+OpenSearch
+http://192.168.0.101:9200 - index con4mity-logs-*
+PostgreSQL
+192.168.0.104:5432 - tables: alerts, rules, users, sources
+User PostgreSQL
+con4mity / Con4mity2024
+Port dashboard final
+8000 (API FastAPI) et 80 ou 443 (frontend)
+OpenSearch Dashboards temp.
+Port 5601 sur CT 103
+
+Ce qui est déjà en place
+Élément
+État
+Docker
+Installé et actif sur CT 103
+OpenSearch
+Tourne sur 192.168.0.101:9200 - logs dans con4mity-logs-*
+PostgreSQL
+Tourne sur CT 104 - tables alerts, rules, users, sources créées
+Table users
+Créée - attendre que Nikita insère un utilisateur de test
+Table alerts
+Créée - se remplira quand Jean Pierre lance ElastAlert2
+Réseau
+CT 103 peut accéder à OpenSearch et PostgreSQL
+
+Outils utilisés
+FastAPI (Python)
+Framework Python moderne pour créer des API REST. Il est léger (environ 100 Mo au repos), très rapide, et génère automatiquement une documentation interactive de l'API. C'est le backend qui fait le lien entre le frontend et les bases de données. Il tourne en continu sur le CT 103 et écoute les requêtes du frontend.
+
+OpenSearch Python client
+Bibliothèque Python (opensearch-py) pour interroger OpenSearch depuis le backend. Elle permet de faire des recherches dans les logs, de filtrer par machine, par date, par sévérité, et de récupérer des statistiques.
+
+psycopg2
+Bibliothèque Python pour se connecter à PostgreSQL. Le backend l'utilise pour lire les alertes, gérer les utilisateurs, et mettre à jour le statut des alertes (nouveau / en cours / résolu).
+
+Frontend HTML/CSS/JS
+L'interface visible dans le navigateur. Peut être développée en HTML/CSS/JS classique ou avec un framework comme React ou Vue. Elle appelle l'API FastAPI pour récupérer et afficher les données en temps réel. Le choix du framework est libre - l'important c'est le résultat visuel et la fluidité.
+
+OpenSearch Dashboards (temporaire)
+Interface préfaite fournie avec OpenSearch. Utilisée pendant le développement pour que toute l'équipe puisse visualiser les logs pendant que le vrai dashboard est en cours de développement. Elle sera remplacée par le dashboard custom - elle ne fait pas partie de la livraison finale.
+
+Missions
+
+Mission 1  -  Lancer OpenSearch Dashboards (outil temporaire)
+Pourquoi : 
+L'équipe a besoin de pouvoir visualiser les logs pendant le développement. OpenSearch Dashboards fournit une interface immédiate sans développement. C'est temporaire - ça sera remplacé par le vrai dashboard.
+Ce qu'il faut faire :
+• Se connecter au CT 103 : pct enter 103 depuis le shell Proxmox
+• Créer le dossier : mkdir -p /opt/con4mity && cd /opt/con4mity
+• Créer un docker-compose.yml avec le service opensearch-dashboards
+• Image à utiliser : opensearchproject/opensearch-dashboards:2.11.0
+• Variable d'environnement : OPENSEARCH_HOSTS=http://192.168.0.101:9200 et DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+• Exposer le port 5601
+• Lancer : docker-compose up -d
+• Vérifier que l'interface est accessible depuis un navigateur : http://192.168.0.103:5601
+• Créer un index pattern con4mity-logs-* dans Dashboards pour visualiser les logs
+
+Mission 2  -  Installer Python et les dépendances
+Pourquoi : 
+Le backend FastAPI tourne en Python. Il faut installer Python 3 et les bibliothèques nécessaires sur le CT 103. Ces bibliothèques permettent au backend de parler avec OpenSearch et PostgreSQL.
+Ce qu'il faut faire :
+• Installer Python 3 et pip : apt install -y python3 python3-pip
+• Installer FastAPI : pip3 install fastapi
+• Installer uvicorn (serveur web pour FastAPI) : pip3 install uvicorn
+• Installer le client OpenSearch : pip3 install opensearch-py
+• Installer psycopg2 pour PostgreSQL : pip3 install psycopg2-binary
+• Vérifier les installations : python3 -c 'import fastapi, opensearchpy, psycopg2; print("OK")'
+
+Mission 3  -  Développer le backend FastAPI de base
+Pourquoi : 
+Le backend est le cœur du dashboard. Il expose des endpoints (des URLs) que le frontend appelle pour récupérer les données. Sans backend, le frontend n'a rien à afficher. On commence par le minimum viable : afficher les logs et les alertes.
+Ce qu'il faut faire :
+• Créer le dossier backend : mkdir -p /opt/con4mity/backend
+• Créer le fichier main.py avec la configuration de connexion à OpenSearch (192.168.0.101:9200) et PostgreSQL (192.168.0.104:5432)
+• Créer l'endpoint GET /logs qui retourne les 100 derniers logs depuis OpenSearch triés par date décroissante
+• Créer l'endpoint GET /alerts qui retourne les alertes depuis PostgreSQL triées par date décroissante
+• Créer l'endpoint GET /stats qui retourne des statistiques : nombre de logs aujourd'hui, nombre d'alertes actives, machines les plus actives
+• Lancer le backend : uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+• Tester chaque endpoint avec curl depuis le CT 103 : curl http://localhost:8000/logs
+• Vérifier que les données retournées sont correctes et complètes
+
+Mission 4  -  Développer le système d'authentification
+Pourquoi : 
+Le dashboard ne doit pas être accessible à n'importe qui. Il faut un système de login. Les comptes sont stockés dans la table users de PostgreSQL. On commence par une authentification simple username/mot de passe - Keycloak (SSO) sera ajouté plus tard.
+Ce qu'il faut faire :
+• Installer la bibliothèque pour les JWT (JSON Web Token) : pip3 install python-jose passlib
+• Créer l'endpoint POST /login qui vérifie le username et le password_hash dans la table users
+• Si les identifiants sont corrects, retourner un token JWT signé avec une clé secrète
+• Protéger les endpoints /logs, /alerts et /stats avec ce token - une requête sans token valide doit retourner une erreur 401
+• Demander à Nikita d'insérer un utilisateur de test dans la table users (username: admin, mot de passe haché)
+• Tester le login et vérifier que les endpoints protégés ne sont plus accessibles sans token
+
+Mission 5  -  Développer l'interface frontend
+Pourquoi : 
+Le frontend c'est ce que le client voit. L'objectif est une interface claire, moderne, accessible sans expertise cyber. On s'inspire de SentinelOne et NinjaOne : simple, efficace, avec l'information importante visible immédiatement.
+Ce qu'il faut faire :
+• Créer un dossier frontend dans /opt/con4mity/
+• Page de login : formulaire username/mot de passe, appel à l'endpoint /login, stockage du token JWT
+• Page principale : vue des logs en temps réel (actualisation automatique toutes les 30 secondes), compteur d'alertes actives bien visible, graphique du nombre de logs par heure
+• Page alertes : liste des alertes avec colonnes horodatage, machine, type d'alerte, sévérité et statut. Bouton pour changer le statut (nouveau → en cours → résolu). Filtre par sévérité et par machine
+• Page sources : liste des machines surveillées, leur IP, quand elles ont envoyé des logs pour la dernière fois
+• Navigation entre les pages claire et simple - un menu latéral suffit
+• Design : utiliser des couleurs cohérentes avec le projet (bleu marine, blanc, accents bleu clair), police lisible, responsive si possible
+
+Mission 6  -  Gérer la mise à jour des statuts d'alertes
+Pourquoi : 
+Quand le client voit une alerte dans le dashboard, il doit pouvoir indiquer qu'il s'en occupe ou qu'il l'a résolue. C'est ce qu'on appelle l'acquittement. Sans ça, les alertes s'accumulent et le client ne sait plus ce qu'il a déjà traité.
+Ce qu'il faut faire :
+• Créer l'endpoint PATCH /alerts/{id} qui permet de changer le statut d'une alerte (new → in_progress → resolved)
+• Ajouter un champ updated_at dans la table alerts pour tracer quand le statut a été modifié
+• Dans le frontend, ajouter des boutons sur chaque alerte pour changer son statut
+• Quand le statut change, l'interface doit se mettre à jour sans recharger la page
+• Ajouter un filtre pour voir uniquement les alertes non résolues (statut new ou in_progress)
+
+Mission 7  -  Remplacer OpenSearch Dashboards par le dashboard custom
+Pourquoi : 
+Une fois le dashboard custom fonctionnel, on arrête OpenSearch Dashboards qui n'était là que pour le dev. Le dashboard custom devient la seule interface.
+Ce qu'il faut faire :
+• Vérifier que le dashboard custom couvre les mêmes fonctionnalités qu'OpenSearch Dashboards : visualisation des logs, filtrage, recherche
+• Arrêter OpenSearch Dashboards : modifier le docker-compose.yml pour retirer le service et faire docker-compose down puis up -d
+• Tester que tout fonctionne sans OpenSearch Dashboards
+• Documenter comment accéder au dashboard (URL, identifiants, comment créer un nouveau compte)
+• Documenter comment relancer le service si besoin
+
+Con4mity · Fiche Rayan · Dashboard & Backend · OTERIA 2025-2026
+

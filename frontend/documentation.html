@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<!--
+  Documentation client Con4mity — à mettre à jour quand l’interface ou l’API évoluent.
+  Version affichée : body[data-doc-version] + footer.js (DOC_VERSION).
+-->
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Con4mity — Documentation</title>
+    <link rel="stylesheet" href="style.css?v=11" />
+  </head>
+  <body class="page page--doc" data-doc-version="1.2.1" data-page-title-key="pageTitle.documentation">
+    <header class="doc-header">
+      <a href="index.html" class="doc-header__link">Con4mity</a>
+      <label class="doc-header__lang">
+        <span class="visually-hidden" data-i18n="lang.label">Langue</span>
+        <select class="lang-select" aria-label="Language">
+          <option value="fr" data-i18n="settings.lang.fr">Français</option>
+          <option value="en" data-i18n="settings.lang.en">English</option>
+          <option value="es" data-i18n="settings.lang.es">Español</option>
+        </select>
+      </label>
+    </header>
+
+    <div class="shell doc-shell">
+      <p class="doc-version">
+        <strong>Documentation</strong> — <span data-i18n="doc.versionLabel">version</span>
+        <span class="mono">1.2.1</span>
+      </p>
+
+      <article class="doc-body" data-doc-lang="fr">
+        <nav class="doc-toc">
+          <a href="#fr-arch">Architecture</a>
+          <a href="#fr-pages">Pages</a>
+          <a href="#fr-api">API</a>
+          <a href="#fr-sql">SQL</a>
+          <a href="#fr-pi">Raspberry Pi</a>
+          <a href="#fr-changelog">Journal des mises à jour</a>
+        </nav>
+        <h1 id="fr-arch">Architecture</h1>
+        <p>
+          Con4mity est un SIEM léger : un backend <strong>FastAPI</strong> sert l’API sous le préfixe
+          <code>/api</code> et les fichiers statiques du dossier <code>frontend/</code> à la racine du site.
+          Les données viennent de <strong>PostgreSQL</strong> (utilisateurs, alertes, journal d’activité) et
+          <strong>OpenSearch</strong> (logs index <code>con4mity-logs-*</code>).
+        </p>
+        <h2 id="fr-pages">Pages de l’interface</h2>
+        <ul>
+          <li><strong>Vue d’ensemble</strong> (<code>overview.html</code>) — indicateurs, graphiques (Chart.js CDN), frise temporelle.</li>
+          <li>
+            <strong>Logs</strong> (<code>logs.html</code>) — flux avec recherche et filtres (dates, hôte, type d’événement, utilisateur). Les
+            colonnes hôte / sévérité / message s’appuient sur les champs dérivés <code>con4mity_ui_*</code> renvoyés par l’API (normalisation
+            syslog / ECS côté <code>backend/log_normalization.py</code>).
+          </li>
+          <li><strong>Alertes</strong> — vue regroupée ou détail, tiroir d’investigation, lien vers les logs filtrés.</li>
+          <li><strong>Rapports</strong> — export CSV navigateur.</li>
+          <li><strong>Automatisation</strong> — playbooks démo et historique (<code>operator_activity</code>).</li>
+          <li><strong>Paramètres</strong> — langue FR/EN/ES et fiches des domaines à brancher (MFA, rétention, etc.).</li>
+        </ul>
+        <h2 id="fr-api">API utile</h2>
+        <ul>
+          <li><code>POST /api/login</code> — JWT.</li>
+          <li>
+            <code>GET /api/overview</code> — synthèse (stats + agrégations légères sur échantillon de logs, <code>top_hosts</code> et
+            <code>top_source_ips</code>).
+          </li>
+          <li>
+            <code>GET /api/logs</code> — paramètres <code>q</code>, <code>host</code>, <code>event_type</code>, <code>user_name</code>, <code>from_ts</code>,
+            <code>to_ts</code>, <code>size</code> ; réponse enrichie (<code>con4mity_ui_host</code>, <code>con4mity_ui_severity</code>, <code>con4mity_ui_message</code>,
+            <code>con4mity_ui_timestamp</code>).
+          </li>
+          <li><code>GET /api/alerts</code>, <code>PATCH /api/alerts/{id}</code>.</li>
+          <li><code>GET /api/playbooks</code>, <code>POST /api/playbooks/{slug}</code>.</li>
+          <li><code>GET /api/activity</code> — nécessite la migration SQL <code>003_operator_activity.sql</code>.</li>
+        </ul>
+        <h2 id="fr-sql">Migrations SQL</h2>
+        <p>
+          Exécuter les scripts dans <code>backend/sql/</code> sur la base PostgreSQL (alertes, colonnes, table
+          <code>operator_activity</code>, etc.).
+        </p>
+        <h2 id="fr-pi">Raspberry Pi 5</h2>
+        <p>
+          Prévoir Python 3 avec venv, limiter la taille des requêtes OpenSearch, et héberger Chart.js en local si le Pi
+          n’a pas Internet pour le CDN.
+        </p>
+        <h2 id="fr-changelog">Journal des mises à jour (doc)</h2>
+        <ul>
+          <li><strong>1.2.1</strong> — Normalisation des logs (syslog dans <code>log</code>, ECS), filtres « hôte » élargis, vue d’ensemble : top adresses IPv4.</li>
+          <li><strong>1.2.0</strong> — Paramètres (structure 3 blocs), langue ES, documentation intégrée, pied de page.</li>
+          <li><strong>1.1.0</strong> — Vue d’ensemble, filtres logs, alertes regroupées, rapports CSV, automatisation.</li>
+        </ul>
+      </article>
+
+      <article class="doc-body" data-doc-lang="en" hidden>
+        <nav class="doc-toc">
+          <a href="#en-arch">Architecture</a>
+          <a href="#en-pages">Pages</a>
+          <a href="#en-api">API</a>
+          <a href="#en-sql">SQL</a>
+          <a href="#en-pi">Raspberry Pi</a>
+          <a href="#en-changelog">Changelog</a>
+        </nav>
+        <h1 id="en-arch">Architecture</h1>
+        <p>
+          Con4mity is a lightweight SIEM: a <strong>FastAPI</strong> backend exposes <code>/api</code> and serves static
+          files from <code>frontend/</code>. Data comes from <strong>PostgreSQL</strong> (users, alerts, activity log) and
+          <strong>OpenSearch</strong> (<code>con4mity-logs-*</code>).
+        </p>
+        <h2 id="en-pages">UI pages</h2>
+        <ul>
+          <li><strong>Overview</strong> — KPIs, Chart.js charts, timeline.</li>
+          <li>
+            <strong>Logs</strong> — stream with search and filters; host / severity / message use derived <code>con4mity_ui_*</code> fields from the API
+            (<code>backend/log_normalization.py</code>).
+          </li>
+          <li><strong>Alerts</strong> — grouped or flat view, drawer, link to filtered logs.</li>
+          <li><strong>Reports</strong> — browser CSV export.</li>
+          <li><strong>Automation</strong> — demo playbooks and history.</li>
+          <li><strong>Settings</strong> — FR/EN/ES language and roadmap cards.</li>
+        </ul>
+        <h2 id="en-api">Useful API</h2>
+        <ul>
+          <li><code>POST /api/login</code> — JWT.</li>
+          <li><code>GET /api/overview</code> — summary (<code>top_hosts</code> and <code>top_source_ips</code>).</li>
+          <li>
+            <code>GET /api/logs</code> — query params <code>q</code>, <code>host</code>, <code>event_type</code>, <code>user_name</code>, <code>from_ts</code>, <code>to_ts</code>,
+            <code>size</code>; enriched hits (<code>con4mity_ui_host</code>, <code>con4mity_ui_severity</code>, <code>con4mity_ui_message</code>, <code>con4mity_ui_timestamp</code>).
+          </li>
+          <li><code>GET /api/alerts</code>, <code>PATCH /api/alerts/{id}</code>.</li>
+          <li><code>GET /api/playbooks</code>, <code>POST /api/playbooks/{slug}</code>.</li>
+          <li><code>GET /api/activity</code> — requires <code>003_operator_activity.sql</code>.</li>
+        </ul>
+        <h2 id="en-sql">SQL migrations</h2>
+        <p>Run scripts under <code>backend/sql/</code> on PostgreSQL.</p>
+        <h2 id="en-pi">Raspberry Pi 5</h2>
+        <p>Use Python 3 venv, cap query sizes; host Chart.js locally if the Pi has no CDN access.</p>
+        <h2 id="en-changelog">Documentation changelog</h2>
+        <ul>
+          <li><strong>1.2.1</strong> — Log normalization (syslog in <code>log</code>, ECS), broader host filters, overview top IPv4 addresses.</li>
+          <li><strong>1.2.0</strong> — Settings hub, Spanish, integrated doc, footer link.</li>
+          <li><strong>1.1.0</strong> — Overview, log filters, grouped alerts, CSV, automation.</li>
+        </ul>
+      </article>
+
+      <article class="doc-body" data-doc-lang="es" hidden>
+        <nav class="doc-toc">
+          <a href="#es-arch">Arquitectura</a>
+          <a href="#es-pages">Páginas</a>
+          <a href="#es-api">API</a>
+          <a href="#es-sql">SQL</a>
+          <a href="#es-pi">Raspberry Pi</a>
+          <a href="#es-changelog">Cambios</a>
+        </nav>
+        <h1 id="es-arch">Arquitectura</h1>
+        <p>
+          Con4mity es un SIEM ligero: backend <strong>FastAPI</strong> con prefijo <code>/api</code> y archivos estáticos
+          en <code>frontend/</code>. Datos en <strong>PostgreSQL</strong> y <strong>OpenSearch</strong>
+          (<code>con4mity-logs-*</code>).
+        </p>
+        <h2 id="es-pages">Páginas</h2>
+        <ul>
+          <li><strong>Resumen</strong> — KPIs, gráficos Chart.js.</li>
+          <li>
+            <strong>Registros</strong> — flujo con búsqueda y filtros; columnas con campos derivados <code>con4mity_ui_*</code> desde la API
+            (<code>backend/log_normalization.py</code>).
+          </li>
+          <li><strong>Alertas</strong> — vista agrupada o detalle.</li>
+          <li><strong>Informes</strong> — exportación CSV.</li>
+          <li><strong>Automatización</strong> — playbooks e historial.</li>
+          <li><strong>Ajustes</strong> — idioma FR/EN/ES y tarjetas de hoja de ruta.</li>
+        </ul>
+        <h2 id="es-api">API</h2>
+        <ul>
+          <li><code>POST /api/login</code> — JWT.</li>
+          <li><code>GET /api/overview</code> — resumen (<code>top_hosts</code> y <code>top_source_ips</code>).</li>
+          <li>
+            <code>GET /api/logs</code> — parámetros <code>q</code>, <code>host</code>, <code>event_type</code>, <code>user_name</code>, <code>from_ts</code>, <code>to_ts</code>,
+            <code>size</code>; respuesta enriquecida (<code>con4mity_ui_*</code>).
+          </li>
+          <li><code>GET /api/alerts</code>, <code>PATCH /api/alerts/{id}</code>.</li>
+          <li><code>GET /api/playbooks</code>, <code>POST /api/playbooks/{slug}</code>.</li>
+          <li><code>GET /api/activity</code> — requiere <code>003_operator_activity.sql</code>.</li>
+        </ul>
+        <h2 id="es-sql">SQL</h2>
+        <p>Ejecutar scripts en <code>backend/sql/</code> sobre PostgreSQL.</p>
+        <h2 id="es-pi">Raspberry Pi 5</h2>
+        <p>Python 3 venv, limitar consultas; alojar Chart.js en local si no hay CDN.</p>
+        <h2 id="es-changelog">Cambios de documentación</h2>
+        <ul>
+          <li><strong>1.2.1</strong> — Normalización de logs (syslog en <code>log</code>, ECS), filtros de host ampliados, resumen con top IPv4.</li>
+          <li><strong>1.2.0</strong> — Ajustes, español, documentación integrada, pie de página.</li>
+          <li><strong>1.1.0</strong> — Resumen, filtros, alertas, CSV, automatización.</li>
+        </ul>
+      </article>
+    </div>
+
+    <div id="app-footer"></div>
+    <script src="i18n.js?v=6"></script>
+    <script src="footer.js?v=6"></script>
+    <script>
+      function syncDocLang() {
+        var lang =
+          typeof CON4MITY_I18N !== "undefined" && CON4MITY_I18N.getLang
+            ? CON4MITY_I18N.getLang()
+            : "fr";
+        document.querySelectorAll("[data-doc-lang]").forEach(function (el) {
+          el.hidden = el.getAttribute("data-doc-lang") !== lang;
+        });
+      }
+      syncDocLang();
+      window.addEventListener("con4mity-lang", syncDocLang);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Con4mity — Alertes</title>
+    <link rel="stylesheet" href="style.css?v=5" />
+  </head>
+  <body class="page" data-page-title-key="pageTitle.alerts" data-nav-active="alerts">
+    <div class="shell">
+      <header class="topbar">
+        <div class="topbar__left">
+          <img
+            class="topbar__logo"
+            src="assets/logo.png?v=5"
+            alt="Con4mity"
+            width="120"
+            height="44"
+            decoding="async"
+          />
+          <div class="topbar__titles">
+            <p class="brand-name">CON4MITY</p>
+            <p class="brand-sub">Open Source SIEM</p>
+          </div>
+        </div>
+        <div class="topbar__right">
+          <nav class="topbar__nav" aria-label="Main">
+            <div id="main-nav-links" class="nav-links"></div>
+          </nav>
+          <button type="button" class="btn btn--ghost" id="logout" data-i18n="nav.logout">Déconnexion</button>
+        </div>
+      </header>
+
+      <section class="page-intro">
+        <h1 data-i18n="alerts.heading">Centre d'alertes</h1>
+        <p class="muted" data-i18n="alerts.subtitle">Traiter et suivre les détections</p>
+      </section>
+
+      <div class="seg" role="tablist" style="margin-bottom: 1rem">
+        <button type="button" class="is-on" id="view-grouped" data-i18n="alerts.grouped">Regroupée</button>
+        <button type="button" id="view-flat" data-i18n="alerts.flat">Détail</button>
+      </div>
+
+      <section class="panel">
+        <div class="panel__head row">
+          <h2 data-i18n="alerts.heading">Alertes</h2>
+          <div class="filters">
+            <label>
+              <span data-i18n="alerts.filterSeverity">Sévérité</span>
+              <select id="f-sev">
+                <option value="" data-i18n-opt="alerts.optAllSev">Toutes</option>
+                <option value="critical" data-i18n-opt="severity.critical">critical</option>
+                <option value="high" data-i18n-opt="severity.high">high</option>
+                <option value="medium" data-i18n-opt="severity.medium">medium</option>
+                <option value="low" data-i18n-opt="severity.low">low</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="alerts.filterStatus">Statut</span>
+              <select id="f-st">
+                <option value="" data-i18n-opt="alerts.optAllSt">Tous</option>
+                <option value="new" data-i18n-opt="status.new">new</option>
+                <option value="in_progress" data-i18n-opt="status.in_progress">in_progress</option>
+                <option value="resolved" data-i18n-opt="status.resolved">resolved</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="tbl-grouped" hidden>
+            <thead>
+              <tr>
+                <th data-i18n="alerts.colRule">Règle</th>
+                <th data-i18n="alerts.colHost">Hôte</th>
+                <th data-i18n="alerts.colSeverity">Sévérité</th>
+                <th data-i18n="alerts.countSimilar">Nombre</th>
+                <th data-i18n="alerts.colStatus">Statut</th>
+                <th data-i18n="alerts.colActions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="alerts-grouped-body"></tbody>
+          </table>
+          <table class="table" id="tbl-flat">
+            <thead>
+              <tr>
+                <th data-i18n="alerts.colDate">Date</th>
+                <th data-i18n="alerts.colRule">Règle</th>
+                <th data-i18n="alerts.colHost">Hôte</th>
+                <th data-i18n="alerts.colSeverity">Sévérité</th>
+                <th data-i18n="alerts.colStatus">Statut</th>
+                <th data-i18n="alerts.colActions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="alerts-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div id="app-footer"></div>
+    <div class="drawer-backdrop" id="drawer-back"></div>
+    <aside class="drawer" id="drawer" aria-hidden="true">
+      <h3 id="drawer-title" data-i18n="alerts.detailTitle">Détail</h3>
+      <p class="muted" id="drawer-meta"></p>
+      <pre id="drawer-desc" style="white-space: pre-wrap; font-size: 0.85rem; color: var(--text)"></pre>
+      <button type="button" class="btn btn--primary" id="drawer-logs" data-i18n="alerts.investigate">Logs</button>
+      <button type="button" class="btn btn--ghost" id="drawer-close">OK</button>
+    </aside>
+
+    <script src="app.js?v=7"></script>
+    <script src="i18n.js?v=5"></script>
+    <script src="nav.js?v=5"></script>
+    <script src="footer.js?v=5"></script>
+    <script>
+      if (!getToken()) window.location.href = "index.html";
+
+      document.getElementById("logout").onclick = () => {
+        localStorage.removeItem("con4mity_token");
+        window.location.href = "index.html";
+      };
+
+      let viewMode = "grouped";
+      let cache = [];
+      let drawerContext = null;
+
+      function groupKey(a) {
+        return `${a.rule_name || ""}|${a.host || ""}|${(a.severity || "").toLowerCase()}`;
+      }
+
+      function buildGroups(list) {
+        const fSev = document.getElementById("f-sev").value;
+        const fSt = document.getElementById("f-st").value;
+        const filtered = list.filter((a) => {
+          if (fSev && (a.severity || "").toLowerCase() !== fSev) return false;
+          if (fSt && (a.status || "") !== fSt) return false;
+          return true;
+        });
+        const m = new Map();
+        for (const a of filtered) {
+          const k = groupKey(a);
+          if (!m.has(k)) m.set(k, []);
+          m.get(k).push(a);
+        }
+        const groups = [];
+        m.forEach((items, k) => {
+          items.sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
+          const rep = items[0];
+          const worst = items.some((x) => x.status === "new")
+            ? "new"
+            : items.some((x) => x.status === "in_progress")
+              ? "in_progress"
+              : "resolved";
+          groups.push({ key: k, items, rep, count: items.length, worst });
+        });
+        groups.sort((a, b) => String(b.rep.created_at || "").localeCompare(String(a.rep.created_at || "")));
+        return groups;
+      }
+
+      function sevClass(s) {
+        const v = (s || "").toLowerCase();
+        if (v === "critical") return "pill pill--crit";
+        if (v === "high") return "pill pill--high";
+        if (v === "medium") return "pill pill--med";
+        return "pill";
+      }
+
+      function statusPillClass(st) {
+        if (st === "new") return "status-pill status-pill--new";
+        if (st === "in_progress") return "status-pill status-pill--progress";
+        if (st === "resolved") return "status-pill status-pill--done";
+        return "status-pill";
+      }
+
+      function statusLabel(st) {
+        if (st === "new") return t("status.new");
+        if (st === "in_progress") return t("status.in_progress");
+        if (st === "resolved") return t("status.resolved");
+        return st || "—";
+      }
+
+      function openDrawer(payload) {
+        drawerContext = payload;
+        document.getElementById("drawer-title").textContent = payload.title || t("alerts.detailTitle");
+        document.getElementById("drawer-meta").textContent = payload.meta || "";
+        document.getElementById("drawer-desc").textContent = payload.desc || "—";
+        document.getElementById("drawer-back").classList.add("is-open");
+        document.getElementById("drawer").classList.add("is-open");
+      }
+
+      function closeDrawer() {
+        document.getElementById("drawer-back").classList.remove("is-open");
+        document.getElementById("drawer").classList.remove("is-open");
+        drawerContext = null;
+      }
+
+      document.getElementById("drawer-back").onclick = closeDrawer;
+      document.getElementById("drawer-close").onclick = closeDrawer;
+      document.getElementById("drawer-logs").onclick = () => {
+        if (!drawerContext) return;
+        sessionStorage.setItem(
+          "con4mity_logs_prefill",
+          JSON.stringify({ host: drawerContext.host || "", q: drawerContext.rule || "" }),
+        );
+        window.location.href = "logs.html";
+      };
+
+      function renderGrouped(list) {
+        const groups = buildGroups(list);
+        const tb = document.getElementById("alerts-grouped-body");
+        tb.innerHTML = "";
+        if (!groups.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td colspan="6" class="table-empty">${list.length ? t("alerts.noFilterMatch") : t("alerts.empty")}</td>`;
+          tb.appendChild(tr);
+          return;
+        }
+        for (const g of groups) {
+          const a = g.rep;
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${a.rule_name || "—"}</td>
+            <td>${a.host || "—"}</td>
+            <td><span class="${sevClass(a.severity)}">${a.severity || "—"}</span></td>
+            <td><span class="pill">${t("alerts.countSimilar", { n: g.count })}</span></td>
+            <td><span class="${statusPillClass(g.worst)}">${statusLabel(g.worst)}</span></td>
+            <td class="actions">
+              <button type="button" class="btn btn--sm" data-act="detail">${t("alerts.expand")}</button>
+              <button type="button" class="btn btn--sm" data-act="in_progress">${t("alerts.actionProgress")}</button>
+              <button type="button" class="btn btn--sm btn--primary" data-act="resolved">${t("alerts.actionResolved")}</button>
+            </td>`;
+          tr.querySelector("[data-act=detail]").onclick = () =>
+            openDrawer({
+              title: a.rule_name || "—",
+              meta: `${a.host || ""} · ${a.severity || ""}`,
+              desc: (g.items.map((x) => `#${x.id} ${x.created_at} [${x.status}] ${x.description || ""}`).join("\n")),
+              host: a.host,
+              rule: a.rule_name,
+            });
+          tr.querySelector("[data-act=in_progress]").onclick = () => patch(g.items[0].id, "in_progress");
+          tr.querySelector("[data-act=resolved]").onclick = () => patch(g.items[0].id, "resolved");
+          tb.appendChild(tr);
+        }
+      }
+
+      function renderFlat(list) {
+        const fSev = document.getElementById("f-sev").value;
+        const fSt = document.getElementById("f-st").value;
+        const rows = list.filter((a) => {
+          if (fSev && (a.severity || "").toLowerCase() !== fSev) return false;
+          if (fSt && (a.status || "") !== fSt) return false;
+          return true;
+        });
+        const tb = document.getElementById("alerts-body");
+        tb.innerHTML = "";
+        if (!rows.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td colspan="6" class="table-empty">${list.length ? t("alerts.noFilterMatch") : t("alerts.empty")}</td>`;
+          tb.appendChild(tr);
+          return;
+        }
+        for (const a of rows) {
+          const tr = document.createElement("tr");
+          tr.dataset.id = a.id;
+          tr.innerHTML = `
+            <td class="mono">${a.created_at || "—"}</td>
+            <td><button type="button" class="btn btn--sm btn--ghost" style="padding:0.2rem 0.4rem">${a.rule_name || "—"}</button></td>
+            <td>${a.host || "—"}</td>
+            <td><span class="${sevClass(a.severity)}">${a.severity || "—"}</span></td>
+            <td><span class="${statusPillClass(a.status)}">${statusLabel(a.status)}</span></td>
+            <td class="actions">
+              <button type="button" class="btn btn--sm" data-act="in_progress">${t("alerts.actionProgress")}</button>
+              <button type="button" class="btn btn--sm btn--primary" data-act="resolved">${t("alerts.actionResolved")}</button>
+            </td>`;
+          tr.querySelector("button.btn--ghost").onclick = () =>
+            openDrawer({
+              title: a.rule_name || "—",
+              meta: `${a.created_at || ""} · ${a.host || ""}`,
+              desc: a.description || JSON.stringify(a, null, 2).slice(0, 1200),
+              host: a.host,
+              rule: a.rule_name,
+            });
+          tr.querySelectorAll("button[data-act]").forEach((btn) => {
+            if (btn.dataset.act === "detail") return;
+            btn.addEventListener("click", () => patch(a.id, btn.dataset.act));
+          });
+          tb.appendChild(tr);
+        }
+      }
+
+      function render() {
+        if (viewMode === "grouped") {
+          document.getElementById("tbl-grouped").hidden = false;
+          document.getElementById("tbl-flat").hidden = true;
+          renderGrouped(cache);
+        } else {
+          document.getElementById("tbl-grouped").hidden = true;
+          document.getElementById("tbl-flat").hidden = false;
+          renderFlat(cache);
+        }
+      }
+
+      async function load() {
+        cache = await apiGet("/alerts");
+        render();
+      }
+
+      async function patch(id, status) {
+        try {
+          await apiPatch(`/alerts/${id}`, { status });
+          await load();
+          closeDrawer();
+        } catch (e) {
+          alert(e.message);
+        }
+      }
+
+      document.getElementById("f-sev").onchange = () => render();
+      document.getElementById("f-st").onchange = () => render();
+
+      document.getElementById("view-grouped").onclick = () => {
+        viewMode = "grouped";
+        document.getElementById("view-grouped").classList.add("is-on");
+        document.getElementById("view-flat").classList.remove("is-on");
+        render();
+      };
+      document.getElementById("view-flat").onclick = () => {
+        viewMode = "flat";
+        document.getElementById("view-flat").classList.add("is-on");
+        document.getElementById("view-grouped").classList.remove("is-on");
+        render();
+      };
+
+      window.addEventListener("con4mity-lang", () => render());
+
+      load().catch((e) => alert(e.message));
+    </script>
+  </body>
+</html>
