@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Con4mity — Connexion</title>
+    <link rel="stylesheet" href="style.css?v=10" />
+  </head>
+  <body class="page page--center" data-page-title-key="pageTitle.login">
+    <!-- Filtre SVG « electric border » (turbulence + displacement) — inspiré freefrontend / CodePen -->
+    <!-- 1×1 + pas de overflow:hidden : sinon Chrome peut ignorer filter:url(#…) sur du HTML -->
+    <svg
+      class="login-electric-filters"
+      width="1"
+      height="1"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <filter
+          id="con4mity-electric"
+          x="-60%"
+          y="-60%"
+          width="220%"
+          height="220%"
+          color-interpolation-filters="sRGB"
+        >
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.045"
+            numOctaves="3"
+            seed="2"
+            result="noise"
+          >
+            <animate
+              attributeName="baseFrequency"
+              dur="2.2s"
+              values="0.032;0.09;0.045"
+              repeatCount="indefinite"
+            />
+            <animate
+              attributeName="seed"
+              dur="3.5s"
+              values="2;31;2"
+              repeatCount="indefinite"
+            />
+          </feTurbulence>
+          <!-- Contraste sur le bruit = déplacements plus « foudre », moins lisse -->
+          <feComponentTransfer in="noise" result="noiseSharp">
+            <feFuncR type="linear" slope="2.4" intercept="-0.35" />
+            <feFuncG type="linear" slope="2.4" intercept="-0.35" />
+          </feComponentTransfer>
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="noiseSharp"
+            scale="56"
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
+        </filter>
+      </defs>
+    </svg>
+
+    <div class="login-toolbar">
+      <label class="login-lang-label">
+        <span class="visually-hidden" data-i18n="lang.label">Langue</span>
+        <select class="lang-select" aria-label="Language">
+          <option value="fr" data-i18n="settings.lang.fr">Français</option>
+          <option value="en" data-i18n="settings.lang.en">English</option>
+          <option value="es" data-i18n="settings.lang.es">Español</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="login-electric-wrap">
+      <div class="login-electric-ring" aria-hidden="true"></div>
+      <main class="card login-card">
+      <img
+        src="assets/logo.png?v=5"
+        alt="Con4mity"
+        class="login-logo"
+        width="220"
+        height="120"
+        decoding="async"
+      />
+      <p class="tagline" data-i18n="login.tagline">
+        SIEM open source — connexion opérateur
+      </p>
+      <p class="muted" style="font-size: 0.8rem; margin-top: -0.25rem" data-i18n="login.langHint"></p>
+      <form id="login-form" class="stack">
+        <label>
+          <span data-i18n="login.username">Identifiant</span>
+          <input name="username" type="text" autocomplete="username" required />
+        </label>
+        <label>
+          <span data-i18n="login.password">Mot de passe</span>
+          <input
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </label>
+        <button type="submit" class="btn btn--primary btn--shine">
+          <span data-i18n="login.submit">Se connecter</span>
+          <svg
+            class="btn--shine__icon"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <path
+              d="M9 6l6 6-6 6"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <p id="login-error" class="error" hidden></p>
+      </form>
+      <p class="login-footer" data-i18n="login.footer">
+        Espace réservé aux opérateurs autorisés.
+      </p>
+      </main>
+    </div>
+
+    <div id="app-footer"></div>
+    <script src="app.js?v=7"></script>
+    <script src="i18n.js?v=5"></script>
+    <script src="footer.js?v=5"></script>
+    <script>
+      function loginErrorMessage(raw) {
+        const s = (raw || "").toLowerCase();
+        if (s.includes("invalid username") || s.includes("invalid password")) {
+          return typeof t === "function" ? t("login.errorInvalid") : "Identifiants invalides";
+        }
+        if (raw && raw.length < 200) return raw;
+        return typeof t === "function" ? t("login.errorNetwork") : "Erreur de connexion";
+      }
+
+      document.getElementById("login-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const err = document.getElementById("login-error");
+        err.hidden = true;
+        const fd = new FormData(e.target);
+        const username = String(fd.get("username") || "").trim();
+        const password = String(fd.get("password") || "");
+        try {
+          const data = await fetch(`${API_BASE}/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+          if (!data.ok) {
+            const text = await data.text();
+            let detail = text;
+            try {
+              const j = JSON.parse(text);
+              if (j.detail) detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+            } catch (_) {}
+            throw new Error(loginErrorMessage(detail));
+          }
+          const json = await data.json();
+          localStorage.setItem("con4mity_token", json.access_token);
+          window.location.href = "overview.html";
+        } catch (x) {
+          err.textContent = loginErrorMessage(x.message);
+          err.hidden = false;
+        }
+      });
+
+    </script>
+  </body>
+</html>
