@@ -66,8 +66,15 @@
         </article>
       </section>
 
-      <section class="toggle-row">
+      <section class="toggle-row" style="flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center">
         <label><input type="checkbox" id="w-charts" checked /> <span data-i18n="overview.widgets">Graphiques</span></label>
+        <label
+          title="Désactivé par défaut : moins de charge. Utilisez « Rafraîchir » pour mettre à jour."
+          data-i18n-title="logs.wsHint"
+        >
+          <input type="checkbox" id="w-ws" />
+          <span data-i18n="logs.wsLive">Temps réel (WebSocket)</span>
+        </label>
         <button type="button" class="btn btn--sm btn--primary" id="btn-refresh" data-i18n="overview.refresh">Rafraîchir</button>
       </section>
 
@@ -243,6 +250,10 @@
       let searchTimer = null;
       let lastVolBuckets = [];
       let closeStream = function () {};
+      const LS_WS_CHARTS = "con4mity_ws_charts";
+      /** Redessin Chart.js au plus toutes les 90 s même si le WS envoie plus souvent */
+      let lastVolChartApply = 0;
+      const VOL_CHART_THROTTLE_MS = 90_000;
 
       function toIsoLocal(dtLocal) {
         if (!dtLocal) return "";
@@ -596,6 +607,55 @@
           .catch(function () {});
       });
 
+      function wireWebSocketOptional() {
+        const pill = document.getElementById("ws-pill");
+        const cb = document.getElementById("w-ws");
+        if (localStorage.getItem(LS_WS_CHARTS) === "1") {
+          cb.checked = true;
+        } else {
+          pill.textContent = "WS off";
+          pill.className = "muted";
+        }
+
+        function stopWs() {
+          try {
+            if (closeStream) closeStream();
+          } catch (_) {
+            /* ignore */
+          }
+          closeStream = function () {};
+          pill.textContent = "WS off";
+          pill.className = "muted";
+        }
+
+        function startWs() {
+          stopWs();
+          lastVolChartApply = 0;
+          closeStream = connectCon4mityStream(function (msg) {
+            if (!msg || !msg.log_volume_24h) return;
+            const now = Date.now();
+            if (now - lastVolChartApply >= VOL_CHART_THROTTLE_MS) {
+              lastVolChartApply = now;
+              applyVolumeStats(msg.log_volume_24h);
+              document.getElementById("kpi-refresh").textContent = new Date().toLocaleTimeString();
+            }
+            pill.textContent = "WS live";
+            pill.className = "ok-pill";
+          });
+        }
+
+        cb.addEventListener("change", function () {
+          if (cb.checked) {
+            localStorage.setItem(LS_WS_CHARTS, "1");
+            startWs();
+          } else {
+            localStorage.setItem(LS_WS_CHARTS, "0");
+            stopWs();
+          }
+        });
+        if (cb.checked) startWs();
+      }
+
       (async function init() {
         try {
           await loadOverview();
@@ -603,14 +663,7 @@
         } catch (e) {
           document.getElementById("logs-status").textContent = t("dashboard.statusError", { m: e.message });
         }
-        closeStream = connectCon4mityStream(function (msg) {
-          if (msg && msg.log_volume_24h) {
-            applyVolumeStats(msg.log_volume_24h);
-            document.getElementById("kpi-refresh").textContent = new Date().toLocaleTimeString();
-            document.getElementById("ws-pill").textContent = "WS live";
-            document.getElementById("ws-pill").className = "ok-pill";
-          }
-        });
+        wireWebSocketOptional();
       })();
       window.addEventListener("beforeunload", function () {
         if (closeStream) closeStream();

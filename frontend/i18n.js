@@ -47,6 +47,9 @@
       "logs.volPerHour": "Moyenne / h (24 h)",
       "logs.sourceAll": "Toutes",
       "logs.sourceOther": "Autre",
+      "logs.wsLive": "Temps réel (WebSocket)",
+      "logs.wsHint":
+        "Désactivé par défaut. Cocher pour mises à jour périodiques (léger) ; le graphique se redessine au plus toutes les 90 s. Sinon utiliser « Rafraîchir ».",
       "theme.toggle": "Thème clair / sombre",
       "services.title": "État des services",
       "sources.heading": "Sources de collecte",
@@ -244,6 +247,9 @@
       "logs.volPerHour": "Average / h (24h)",
       "logs.sourceAll": "All",
       "logs.sourceOther": "Other",
+      "logs.wsLive": "Live (WebSocket)",
+      "logs.wsHint":
+        "Off by default. Check for periodic light updates; chart redraws at most every 90s. Or use « Refresh » only.",
       "theme.toggle": "Light / dark theme",
       "services.title": "Service health",
       "sources.heading": "Ingestion sources",

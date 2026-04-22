@@ -1164,7 +1164,7 @@ async def ws_event_stream(websocket: WebSocket) -> None:
                     "log_volume_24h": vol,
                 }
             )
-            await asyncio.sleep(3)
+            await asyncio.sleep(30)
     except WebSocketDisconnect:
         return
 
