@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import time
+import threading
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,15 +29,21 @@ from fastapi import (
     FastAPI,
     HTTPException,
     Query,
+    Request,
     WebSocket,
     WebSocketDisconnect,
     status,
 )
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import (
+    APIKeyHeader,
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
+from starlette.middleware.base import BaseHTTPMiddleware
 from jose import JWTError, jwt
 from opensearchpy import OpenSearch
 from psycopg2 import errors as pg_errors
@@ -49,6 +56,15 @@ from log_normalization import (
     pick_timestamp_raw,
     ui_envelope,
 )
+from security_helpers import (
+    client_ip_from_request,
+    generate_api_key,
+    get_password_policy_from_env,
+    hash_api_key,
+    is_ip_in_allowlist,
+    parse_ip_allowlist_env,
+    validate_password_strength,
+)
 
 logger = logging.getLogger("con4mity")
 
@@ -56,6 +72,12 @@ logger = logging.getLogger("con4mity")
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-dev-only")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
+# Clés API : hachage avec pepper dédié (prod : définir API_KEY_PEPPER)
+API_KEY_PEPPER = os.getenv("API_KEY_PEPPER", JWT_SECRET)
+LOGIN_MAX_FAILED = int(os.getenv("LOGIN_MAX_FAILED_PER_IP_USER", "10"))
+LOGIN_RATE_WINDOW_SEC = int(os.getenv("LOGIN_RATE_WINDOW_SEC", "900"))
+_login_fail_lock = threading.Lock()
+_login_fail_ts: dict[str, list[float]] = {}
 
 PG_HOST = os.getenv("PG_HOST", "192.168.0.104")
 PG_NAME = os.getenv("PG_NAME", "con4mity")
@@ -75,6 +97,7 @@ _DEFAULT_FRONT = _BACKEND_DIR.parent / "frontend"
 FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", str(_DEFAULT_FRONT)))
 
 security = HTTPBearer(auto_error=False)
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 app = FastAPI(title="Con4mity API")
 
@@ -85,6 +108,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class IPAllowlistMiddleware(BaseHTTPMiddleware):
+    """Si CON4MITY_IP_ALLOWLIST est défini, refuse les appels /api/* hors plages (sauf /api/health)."""
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        path = request.url.path
+        if not path.startswith("/api/"):
+            return await call_next(request)
+        if path == "/api/health":
+            return await call_next(request)
+        allow = parse_ip_allowlist_env()
+        if not allow:
+            return await call_next(request)
+        ip = client_ip_from_request(
+            request.headers.get("x-forwarded-for"),
+            request.headers.get("x-real-ip"),
+            request.client.host if request.client else None,
+        )
+        if is_ip_in_allowlist(ip, allow):
+            return await call_next(request)
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Adresse IP non autorisée (CON4MITY_IP_ALLOWLIST)."},
+        )
+
+
+app.add_middleware(IPAllowlistMiddleware)
 
 os_client = OpenSearch(
     hosts=[{"host": OS_HOST, "port": OS_PORT}],
@@ -462,8 +513,34 @@ class ActivityIn(BaseModel):
     detail: str | None = Field(None, max_length=2000)
 
 
+class SecurityPolicyOut(BaseModel):
+    min_length: int
+    require_uppercase: bool
+    require_lowercase: bool
+    require_digit: bool
+    require_special: bool
+    source: str = "merged"  # merged | env
+
+
+class SecurityPolicyUpdate(BaseModel):
+    min_length: int = Field(..., ge=8, le=256)
+    require_uppercase: bool = True
+    require_lowercase: bool = True
+    require_digit: bool = True
+    require_special: bool = False
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=1, max_length=500)
+
+
+class ApiKeyCreateIn(BaseModel):
+    name: str = Field("default", max_length=200)
+
+
 # ---------- Auth ----------
-def create_token(sub: str, role: str | None) -> str:
+def create_token(sub: str, role: str | None, user_id: int | None = None) -> str:
     """python-jose attend surtout des timestamps numériques pour iat/exp."""
     now = datetime.now(timezone.utc)
     exp = now + timedelta(hours=JWT_EXPIRE_HOURS)
@@ -473,6 +550,8 @@ def create_token(sub: str, role: str | None) -> str:
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp()),
     }
+    if user_id is not None:
+        payload["uid"] = int(user_id)
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
     if isinstance(token, bytes):
         token = token.decode("utf-8")
@@ -483,21 +562,192 @@ def decode_token(token: str) -> dict[str, Any]:
     return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
 
 
+def get_merged_password_policy() -> dict[str, Any]:
+    """Ligne `security_policy` (id=1) prime sur les variables d'env, sinon env seul."""
+    base = get_password_policy_from_env()
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError):
+        return base
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            try:
+                cur.execute(
+                    """
+                    SELECT min_length, require_uppercase, require_lowercase, require_digit, require_special
+                    FROM security_policy
+                    WHERE id = 1
+                    """
+                )
+            except pg_errors.UndefinedTable:
+                return base
+            row = cur.fetchone()
+    except psycopg2.Error:
+        return base
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    if not row:
+        return base
+    return {
+        "min_length": int(row.get("min_length", base["min_length"])),
+        "require_uppercase": bool(row.get("require_uppercase", base.get("require_uppercase"))),
+        "require_lowercase": bool(row.get("require_lowercase", base.get("require_lowercase"))),
+        "require_digit": bool(row.get("require_digit", base.get("require_digit"))),
+        "require_special": bool(row.get("require_special", base.get("require_special"))),
+    }
+
+
+def _log_login_event(
+    username: str | None,
+    user_id: int | None,
+    success: bool,
+    reason: str | None,
+    ip: str,
+    user_agent: str | None,
+    geo: str | None = None,
+) -> None:
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError):
+        return
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO login_events (username, user_id, success, reason, ip, user_agent, geo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (username, user_id, success, reason, ip, user_agent, geo),
+                )
+            except pg_errors.UndefinedTable:
+                return
+        conn.commit()
+    except psycopg2.Error:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _login_throttle_key(ip: str, username: str) -> str:
+    return f"{ip}:{username[:200]}"
+
+
+def _is_login_throttled(key: str) -> bool:
+    now = time.time()
+    with _login_fail_lock:
+        ts = _login_fail_ts.get(key, [])
+        win = float(LOGIN_RATE_WINDOW_SEC)
+        ts = [t for t in ts if now - t < win]
+        _login_fail_ts[key] = ts
+        return len(ts) >= LOGIN_MAX_FAILED
+
+
+def _record_login_failure(key: str) -> None:
+    now = time.time()
+    with _login_fail_lock:
+        _login_fail_ts.setdefault(key, []).append(now)
+
+
+def _clear_login_throttle_key(key: str) -> None:
+    with _login_fail_lock:
+        _login_fail_ts.pop(key, None)
+
+
+def _validate_api_key_and_user(raw_key: str) -> dict[str, Any] | None:
+    h = hash_api_key(raw_key.strip(), API_KEY_PEPPER)
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError):
+        return None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            try:
+                cur.execute(
+                    """
+                    SELECT k.id, k.user_id, u.username, u.role
+                    FROM api_keys k
+                    JOIN users u ON u.id = k.user_id
+                    WHERE k.key_hash = %s AND NOT k.revoked
+                    """,
+                    (h,),
+                )
+            except pg_errors.UndefinedTable:
+                return None
+            row = cur.fetchone()
+            if not row:
+                return None
+            cur.execute(
+                "UPDATE api_keys SET last_used_at = NOW() WHERE id = %s",
+                (row["id"],),
+            )
+        conn.commit()
+    except psycopg2.Error:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return {
+        "sub": row["username"],
+        "role": (row.get("role") or ""),
+        "uid": int(row["user_id"]),
+        "auth": "api_key",
+    }
+
+
 async def require_user(
+    request: Request,
     creds: HTTPAuthorizationCredentials | None = Depends(security),
+    api_key: str | None = Depends(api_key_header),
 ) -> dict[str, Any]:
+    if api_key and api_key.strip():
+        u = _validate_api_key_and_user(api_key)
+        if u:
+            return u
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Clé API invalide ou révoquée",
+        )
     if creds is None or not creds.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing bearer token",
+            detail="Missing bearer token or X-API-Key",
         )
     try:
-        return decode_token(creds.credentials)
+        return decode_token(creds.credentials) | {"auth": "jwt"}
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-        )
+        ) from None
+
+
+def _is_admin(claims: dict[str, Any]) -> bool:
+    r = (claims.get("role") or "").strip().lower()
+    return r == "admin"
+
+
+async def require_admin(
+    user: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
+    if not _is_admin(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé administrateur")
+    return user
 
 
 # ---------- Routes API ----------
@@ -506,8 +756,424 @@ def api_health():
     return {"status": "Con4mity backend OK", "frontend": str(FRONTEND_DIR)}
 
 
+def _user_id_from_claims(claims: dict[str, Any]) -> int | None:
+    u = claims.get("uid")
+    if isinstance(u, int):
+        return u
+    if isinstance(u, str) and u.isdigit():
+        return int(u)
+    sub = (claims.get("sub") or "").strip()
+    if not sub:
+        return None
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError):
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE username = %s", (sub,))
+            r = cur.fetchone()
+        return int(r[0]) if r else None
+    except Exception:
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+@api.get("/security/policy", response_model=SecurityPolicyOut)
+def api_security_policy_public():
+    """Politique courante (DB + env) — affichage formulaire changement de mot de passe."""
+    p = get_merged_password_policy()
+    src = "merged"
+    try:
+        c = pg_connect()
+        try:
+            with c.cursor() as cur:
+                try:
+                    cur.execute("SELECT 1 FROM security_policy WHERE id = 1")
+                except pg_errors.UndefinedTable:
+                    src = "env"
+                else:
+                    if not cur.fetchone():
+                        src = "env"
+        finally:
+            c.close()
+    except (psycopg2.Error, OSError):
+        src = "env"
+    return SecurityPolicyOut(
+        min_length=int(p["min_length"]),
+        require_uppercase=bool(p["require_uppercase"]),
+        require_lowercase=bool(p["require_lowercase"]),
+        require_digit=bool(p["require_digit"]),
+        require_special=bool(p["require_special"]),
+        source=src,
+    )
+
+
+@api.get("/security/session")
+def api_security_session(user: dict[str, Any] = Depends(require_user)):
+    """Rôle et mode d'auth (JWT vs clé API) pour l'UI Paramètres / Sécurité."""
+    return {
+        "username": user.get("sub"),
+        "role": (user.get("role") or "").strip().lower() or "user",
+        "auth": user.get("auth") or "jwt",
+    }
+
+
+@api.get("/security/ip-allowlist")
+def api_security_ip_status():
+    """Indique si CON4MITY_IP_ALLOWLIST est actif (sans divulguer les plages)."""
+    nets = parse_ip_allowlist_env()
+    return {"active": bool(nets), "count": len(nets)}
+
+
+@api.put("/security/policy", response_model=SecurityPolicyOut)
+def api_security_policy_put(
+    body: SecurityPolicyUpdate,
+    _admin: dict[str, Any] = Depends(require_admin),
+):
+    """Met à jour la politique mots de passe (persistée en base)."""
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        raise HTTPException(500, detail=f"Base indisponible: {e}") from e
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO security_policy (id, updated_at, min_length, require_uppercase, require_lowercase, require_digit, require_special)
+                    VALUES (1, NOW(), %s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        updated_at = NOW(),
+                        min_length = EXCLUDED.min_length,
+                        require_uppercase = EXCLUDED.require_uppercase,
+                        require_lowercase = EXCLUDED.require_lowercase,
+                        require_digit = EXCLUDED.require_digit,
+                        require_special = EXCLUDED.require_special
+                    """,
+                    (
+                        body.min_length,
+                        body.require_uppercase,
+                        body.require_lowercase,
+                        body.require_digit,
+                        body.require_special,
+                    ),
+                )
+            except pg_errors.UndefinedTable:
+                raise HTTPException(
+                    503,
+                    detail="Migrations requises : exécuter backend/sql/005_security_production.sql",
+                ) from None
+        conn.commit()
+    except HTTPException:
+        raise
+    except psycopg2.Error as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(500, detail=str(e)) from e
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    p = get_merged_password_policy()
+    return SecurityPolicyOut(
+        min_length=int(p["min_length"]),
+        require_uppercase=bool(p["require_uppercase"]),
+        require_lowercase=bool(p["require_lowercase"]),
+        require_digit=bool(p["require_digit"]),
+        require_special=bool(p["require_special"]),
+        source="merged",
+    )
+
+
+@api.get("/security/login-events")
+def api_security_login_events(
+    _admin: dict[str, Any] = Depends(require_admin),
+    page: int = Query(1, ge=1, le=10_000),
+    page_size: int = Query(50, ge=1, le=200),
+    username: str | None = None,
+):
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        raise HTTPException(500, detail=str(e)) from e
+    off = (page - 1) * page_size
+    ufilter = (username or "").strip() or None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            try:
+                if ufilter:
+                    cur.execute(
+                        "SELECT count(*)::bigint AS c FROM login_events WHERE username = %s",
+                        (ufilter,),
+                    )
+                else:
+                    cur.execute("SELECT count(*)::bigint AS c FROM login_events")
+            except pg_errors.UndefinedTable:
+                return {"items": [], "total": 0, "page": page, "page_size": page_size}
+            total = int((cur.fetchone() or {}).get("c", 0) or 0)
+            if ufilter:
+                cur.execute(
+                    """
+                    SELECT id, ts, username, user_id, success, reason, ip, user_agent, geo
+                    FROM login_events
+                    WHERE username = %s
+                    ORDER BY ts DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (ufilter, page_size, off),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id, ts, username, user_id, success, reason, ip, user_agent, geo
+                    FROM login_events
+                    ORDER BY ts DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (page_size, off),
+                )
+            rows = cur.fetchall()
+    except HTTPException:
+        raise
+    except psycopg2.Error as e:
+        raise HTTPException(500, detail=str(e)) from e
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return {
+        "items": [dict(r) for r in rows or []],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@api.get("/security/api-keys")
+def api_security_api_keys_list(_admin: dict[str, Any] = Depends(require_admin)):
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        raise HTTPException(500, detail=str(e)) from e
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            try:
+                cur.execute(
+                    """
+                    SELECT k.id, k.created_at, k.name, k.key_prefix, k.last_used_at, k.revoked, u.username AS owner
+                    FROM api_keys k
+                    JOIN users u ON u.id = k.user_id
+                    WHERE NOT k.revoked
+                    ORDER BY k.created_at DESC
+                    LIMIT 500
+                    """
+                )
+            except pg_errors.UndefinedTable:
+                return {"items": []}
+            items = cur.fetchall()
+    except psycopg2.Error as e:
+        raise HTTPException(500, detail=str(e)) from e
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return {"items": [dict(x) for x in items]}
+
+
+@api.post("/security/api-keys")
+def api_security_api_keys_create(
+    body: ApiKeyCreateIn,
+    _admin: dict[str, Any] = Depends(require_admin),
+):
+    """Création : la valeur secrète n'est retournée qu'ici. Stocker là où il faut (vault, .env, etc.)."""
+    uid = _user_id_from_claims(_admin)
+    if not uid:
+        raise HTTPException(400, detail="ID utilisateur introuvable (reconnectez-vous).")
+    raw = generate_api_key()
+    kh = hash_api_key(raw, API_KEY_PEPPER)
+    prefix = raw[:12] + "…"
+    nm = (body.name or "default").strip()[:200] or "default"
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        raise HTTPException(500, detail=str(e)) from e
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO api_keys (user_id, name, key_hash, key_prefix, revoked)
+                    VALUES (%s, %s, %s, %s, FALSE)
+                    RETURNING id, created_at
+                    """,
+                    (uid, nm, kh, prefix),
+                )
+            except pg_errors.UndefinedTable:
+                raise HTTPException(
+                    503,
+                    detail="Migrations requises : exécuter backend/sql/005_security_production.sql",
+                ) from None
+            row = cur.fetchone()
+        conn.commit()
+    except HTTPException:
+        raise
+    except psycopg2.Error as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(500, detail=str(e)) from e
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    _log_operator_activity(
+        (_admin.get("sub") or "admin")[:200],
+        "api_key_create",
+        f"id {row.get('id') if row else '?'}"[:2000],
+    )
+    return {
+        "id": int((row or {}).get("id", 0)),
+        "name": nm,
+        "key_prefix": prefix,
+        "secret": raw,
+        "message": "Conservez ce secret de façon sûre ; il ne sera plus affiché.",
+    }
+
+
+@api.delete("/security/api-keys/{key_id}")
+def api_security_api_keys_delete(
+    key_id: int,
+    _admin: dict[str, Any] = Depends(require_admin),
+):
+    n = 0
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        raise HTTPException(500, detail=str(e)) from e
+    try:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(
+                    "UPDATE api_keys SET revoked = TRUE WHERE id = %s AND NOT revoked",
+                    (key_id,),
+                )
+            except pg_errors.UndefinedTable:
+                raise HTTPException(503, detail="Migrations requises") from None
+            n = cur.rowcount
+        conn.commit()
+    except HTTPException:
+        raise
+    except psycopg2.Error as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(500, detail=str(e)) from e
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    if not n:
+        raise HTTPException(404, detail="Clé inconnue ou déjà révoquée")
+    return {"id": key_id, "revoked": True}
+
+
+@api.post("/security/change-password")
+def api_security_change_password(
+    body: ChangePasswordIn,
+    user: dict[str, Any] = Depends(require_user),
+):
+    if (user.get("auth") or "") == "api_key":
+        raise HTTPException(
+            400,
+            detail="Changement de mot de passe réservé à une session web (Bearer JWT), pas à une clé API.",
+        )
+    pol = get_merged_password_policy()
+    ok, msg = validate_password_strength(body.new_password, pol)
+    if not ok:
+        raise HTTPException(400, detail=msg)
+    uid = _user_id_from_claims(user)
+    if not uid:
+        raise HTTPException(400, detail="Utilisateur non résolu. Reconnectez-vous pour obtenir un jeton récent (uid).")
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        raise HTTPException(500, detail=str(e)) from e
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, password_hash, username FROM users WHERE id = %s",
+                (uid,),
+            )
+            row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, detail="User not found")
+        old_h = (row.get("password_hash") or "").encode("utf-8")
+        if not bcrypt.checkpw(body.current_password.encode("utf-8"), old_h):
+            raise HTTPException(401, detail="Mot de passe actuel incorrect")
+        new_h = bcrypt.hashpw(body.new_password.encode("utf-8"), bcrypt.gensalt(rounds=12))
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET password_hash = %s WHERE id = %s",
+                (new_h.decode("utf-8"), uid),
+            )
+        conn.commit()
+    except HTTPException:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    except psycopg2.Error as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise HTTPException(500, detail=str(e)) from e
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    uname = (row.get("username") or "user")[:200] if row else "user"
+    _log_operator_activity(uname, "password_change", "self-service")
+    return {"ok": True, "message": "Mot de passe mis à jour. Reconnectez-vous sur les autres appareils si besoin."}
+
+
 @api.post("/login", response_model=TokenOut)
-def login(body: LoginBody):
+def login(request: Request, body: LoginBody):
+    """Authentification classique : journal de connexions, anti-bruteforce (par IP+utilisateur)."""
+    uname = (body.username or "").strip()[:200]
+    ip = client_ip_from_request(
+        request.headers.get("x-forwarded-for"),
+        request.headers.get("x-real-ip"),
+        request.client.host if request.client else None,
+    )
+    ua = (request.headers.get("user-agent") or "")[:2000] or None
+    geo = (request.headers.get("cf-ipcountry") or request.headers.get("x-geo-country") or "")[:12] or None
+    throttle_key = _login_throttle_key(ip, uname)
+    if _is_login_throttled(throttle_key):
+        _log_login_event(
+            uname, None, False, "rate_limited", ip, ua, geo,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de tentatives. Réessayez plus tard.",
+        )
+
     conn = pg_connect()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -520,6 +1186,8 @@ def login(body: LoginBody):
         conn.close()
 
     if row is None:
+        _record_login_failure(throttle_key)
+        _log_login_event(uname, None, False, "unknown_user", ip, ua, geo)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -527,6 +1195,7 @@ def login(body: LoginBody):
 
     stored_hash = (row.get("password_hash") or "").strip()
     if not stored_hash:
+        _log_login_event(uname, int(row["id"]), False, "empty_hash", ip, ua, geo)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="User has empty password_hash",
@@ -537,18 +1206,23 @@ def login(body: LoginBody):
             stored_hash.encode("utf-8"),
         )
     except ValueError as e:
+        _log_login_event(uname, int(row["id"]), False, f"hash_error: {e}", ip, ua, geo)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Password hash invalid: {e}",
         ) from e
 
     if not ok:
+        _record_login_failure(throttle_key)
+        _log_login_event(uname, int(row["id"]), False, "bad_password", ip, ua, geo)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
 
-    token = create_token(sub=row["username"], role=row.get("role"))
+    _clear_login_throttle_key(throttle_key)
+    _log_login_event(uname, int(row["id"]), True, None, ip, ua, geo)
+    token = create_token(sub=row["username"], role=row.get("role"), user_id=int(row["id"]))
     return TokenOut(access_token=token)
 
 

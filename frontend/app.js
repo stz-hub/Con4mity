@@ -132,6 +132,49 @@ async function apiPatch(path, body) {
   return r.json();
 }
 
+async function apiPut(path, body) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const r = await fetch(`${API_BASE}${p}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  if (r.status === 401) {
+    localStorage.removeItem("con4mity_token");
+    window.location.href = "index.html";
+    throw new Error("Session expirée");
+  }
+  if (!r.ok) {
+    const raw = (await r.text()) || r.statusText;
+    let msg = raw;
+    try {
+      const j = JSON.parse(raw);
+      if (j && j.detail) msg = Array.isArray(j.detail) ? j.detail.map((d) => d.msg || d).join(" ") : j.detail;
+    } catch (_) {
+      /* keep raw */
+    }
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+async function apiDelete(path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const r = await fetch(`${API_BASE}${p}`, { method: "DELETE", headers: authHeaders() });
+  if (r.status === 401) {
+    localStorage.removeItem("con4mity_token");
+    window.location.href = "index.html";
+    throw new Error("Session expirée");
+  }
+  if (!r.ok) {
+    const raw = (await r.text()) || r.statusText;
+    throw new Error(raw.slice(0, 500) || r.statusText);
+  }
+  if (r.status === 204) return null;
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
+
 /**
  * WebSocket /api/stream — stats + volume 24h (mise à jour toutes ~3s).
  * Retourne une fonction close().

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Con4mity — Sécurité</title>
+    <link rel="stylesheet" href="style.css?v=5" />
+  </head>
+  <body class="page" data-page-title-key="pageTitle.security" data-nav-active="settings">
+    <div class="shell">
+      <header class="topbar">
+        <div class="topbar__left">
+          <img
+            class="topbar__logo"
+            src="assets/logo.png?v=5"
+            alt="Con4mity"
+            width="120"
+            height="44"
+            decoding="async"
+          />
+          <div class="topbar__titles">
+            <p class="brand-name">CON4MITY</p>
+            <p class="brand-sub">Open Source SIEM</p>
+          </div>
+        </div>
+        <div class="topbar__right">
+          <nav class="topbar__nav" aria-label="Main">
+            <div id="main-nav-links" class="nav-links"></div>
+          </nav>
+          <button type="button" class="btn btn--ghost" id="logout" data-i18n="nav.logout">Déconnexion</button>
+        </div>
+      </header>
+
+      <p class="muted" style="margin-bottom: 0.5rem">
+        <a href="settings.html" data-i18n="security.backToSettings">← Paramètres</a>
+      </p>
+      <section class="page-intro">
+        <h1 data-i18n="security.heading">Sécurité</h1>
+        <p class="muted" data-i18n="security.subtitle">
+          Politique de mots de passe, journal de connexions, filtrage IP, clés API.
+        </p>
+      </section>
+
+      <div id="sec-msg" class="panel" style="display: none; border-color: var(--accent); margin-bottom: 1rem">
+        <p id="sec-msg-text" style="margin: 0"></p>
+      </div>
+
+      <section class="panel" style="margin-bottom: 1.25rem">
+        <h2 data-i18n="security.ip.title">Filtre IP (côté serveur)</h2>
+        <p class="muted" data-i18n="security.ip.hint">Les plages autorisées sont définies par la variable d'environnement <code>CON4MITY_IP_ALLOWLIST</code> au démarrage de l'API (format CIDR, séparés par des virgules). Géo : les en-têtes <code>CF-IPCountry</code> ou <code>X-Geo-Country</code> sont enregistrés dans le journal de connexions s'ils sont présents.</p>
+        <p id="sec-ip-status" class="brand-sub"></p>
+      </section>
+
+      <section class="panel" style="margin-bottom: 1.25rem">
+        <h2 data-i18n="security.policyView.title">Politique de mots de passe (effectif)</h2>
+        <p id="sec-policy-view" class="brand-sub" style="white-space: pre-wrap"></p>
+      </section>
+
+      <section class="panel" id="sec-admin-policy" style="display: none; margin-bottom: 1.25rem">
+        <h2 data-i18n="security.policyEdit.title">Politique (administrateur)</h2>
+        <p class="muted" data-i18n="security.policyEdit.hint">Enregistrement en base (table <code>security_policy</code>) — requiert la migration SQL 005.</p>
+        <form id="form-policy" class="settings-lang-row" style="flex-direction: column; align-items: stretch; gap: 0.75rem; max-width: 28rem">
+          <label>
+            <span data-i18n="security.policyEdit.min">Longueur min.</span>
+            <input type="number" name="min_length" id="pol-min" min="8" max="256" class="table" style="width: 100%; max-width: 12rem; padding: 0.4rem" />
+          </label>
+          <label><input type="checkbox" id="pol-up" name="u" /> <span data-i18n="security.policyEdit.upper">Majuscule requise</span></label>
+          <label><input type="checkbox" id="pol-lo" name="l" /> <span data-i18n="security.policyEdit.lower">Minuscule requise</span></label>
+          <label><input type="checkbox" id="pol-di" name="d" /> <span data-i18n="security.policyEdit.digit">Chiffre requis</span></label>
+          <label><input type="checkbox" id="pol-sp" name="s" /> <span data-i18n="security.policyEdit.special">Caractère spécial requis</span></label>
+          <button type="submit" class="btn" data-i18n="security.policyEdit.save">Enregistrer</button>
+        </form>
+      </section>
+
+      <section class="panel" style="margin-bottom: 1.25rem">
+        <h2 data-i18n="security.pwd.title">Changer de mot de passe</h2>
+        <p class="muted" data-i18n="security.pwd.hint">Réservé à une session web (pas aux appels par clé API).</p>
+        <form id="form-pwd" class="settings-lang-row" style="flex-direction: column; align-items: stretch; gap: 0.75rem; max-width: 24rem">
+          <input type="password" id="pw-old" name="old" data-i18n-placeholder="security.pwd.current" placeholder="Mot de passe actuel" class="table" style="width: 100%; padding: 0.5rem" autocomplete="current-password" />
+          <input type="password" id="pw-new" name="new" data-i18n-placeholder="security.pwd.new" placeholder="Nouveau mot de passe" class="table" style="width: 100%; padding: 0.5rem" autocomplete="new-password" />
+          <button type="submit" class="btn" data-i18n="security.pwd.submit">Mettre à jour</button>
+        </form>
+      </section>
+
+      <section class="panel" id="sec-logs" style="display: none; margin-bottom: 1.25rem">
+        <h2 data-i18n="security.logs.title">Journal des connexions</h2>
+        <p class="table-empty" id="sec-logs-empty" data-i18n="security.logs.empty" style="display: none">Aucun événement (ou exécutez la migration 005 sur PostgreSQL).</p>
+        <div class="table-wrap table-wrap--wide">
+          <table class="table" id="sec-logs-table" style="display: none; font-size: 0.88rem">
+            <thead>
+              <tr>
+                <th data-i18n="security.logs.col.time">Heure (UTC)</th>
+                <th data-i18n="security.logs.col.user">Utilisateur</th>
+                <th data-i18n="security.logs.col.ok">OK</th>
+                <th data-i18n="security.logs.col.reason">Détail</th>
+                <th data-i18n="security.logs.col.ip">IP</th>
+                <th data-i18n="security.logs.col.geo">Géo</th>
+              </tr>
+            </thead>
+            <tbody id="sec-logs-body"></tbody>
+          </table>
+        </div>
+        <p class="muted" id="sec-logs-footer"></p>
+      </section>
+
+      <section class="panel" id="sec-keys" style="display: none; margin-bottom: 1.25rem">
+        <h2 data-i18n="security.keys.title">Clés API</h2>
+        <p class="muted" data-i18n="security.keys.hint">Utilisez l'en-tête <code>X-API-Key</code> en complément ou à la place du Bearer. La valeur secrète n'est affichée qu'à la création — copiez-la vers un endroit sûr.</p>
+        <form id="form-key" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem">
+          <input type="text" id="key-name" data-i18n-placeholder="security.keys.name" placeholder="Nom (optionnel)" maxlength="200" class="table" style="min-width: 10rem; padding: 0.45rem" />
+          <button type="submit" class="btn" data-i18n="security.keys.create">Créer une clé</button>
+        </form>
+        <p class="table-empty" id="sec-keys-empty" data-i18n="security.keys.empty" style="display: none">Aucune clé active.</p>
+        <ul id="sec-keys-list" class="brand-sub" style="list-style: none; padding: 0; margin: 0"></ul>
+        <p id="sec-key-secret" class="panel" style="display: none; border-color: var(--ok)"></p>
+      </section>
+    </div>
+
+    <div id="app-footer"></div>
+    <script src="app.js?v=8"></script>
+    <script src="i18n.js?v=6"></script>
+    <script src="nav.js?v=5"></script>
+    <script src="footer.js?v=5"></script>
+    <script>
+      (function () {
+        if (!getToken()) {
+          window.location.href = "index.html";
+          return;
+        }
+        const msg = document.getElementById("sec-msg");
+        const msgT = document.getElementById("sec-msg-text");
+        function showMessage(text, ok) {
+          msg.style.display = "block";
+          msg.style.borderColor = ok ? "var(--ok)" : "var(--crit)";
+          msgT.textContent = text;
+        }
+        function esc(s) {
+          if (s == null) return "—";
+          return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        }
+        document.getElementById("logout").onclick = function () {
+          localStorage.removeItem("con4mity_token");
+          window.location.href = "index.html";
+        };
+        const adminPolicy = document.getElementById("sec-admin-policy");
+        const secLogs = document.getElementById("sec-logs");
+        const secKeys = document.getElementById("sec-keys");
+        const polMin = document.getElementById("pol-min");
+        const polU = document.getElementById("pol-up");
+        const polL = document.getElementById("pol-lo");
+        const polD = document.getElementById("pol-di");
+        const polS = document.getElementById("pol-sp");
+        const policyView = document.getElementById("sec-policy-view");
+        const ipStatus = document.getElementById("sec-ip-status");
+
+        apiGet("/security/ip-allowlist")
+          .then(function (d) {
+            if (d.active) {
+              ipStatus.textContent =
+                (window.t && window.t("security.ip.on")) || "Filtre IP : actif" + (d.count ? " (" + d.count + " plage(s))" : ".");
+            } else {
+              ipStatus.textContent =
+                (window.t && window.t("security.ip.off")) || "Filtre IP : non configuré (toutes adresses autorisées sur /api).";
+            }
+            if (window.CON4MITY_I18N && window.CON4MITY_I18N.applyTranslations) window.CON4MITY_I18N.applyTranslations();
+          })
+          .catch(function () {
+            ipStatus.textContent = "—";
+          });
+
+        function renderPolicyView(p) {
+          var ex =
+            (window.t && window.t("security.policyView.explanation")) || "Règles :";
+          policyView.textContent =
+            ex +
+            "\n" +
+            "min_length: " +
+            p.min_length +
+            "\n" +
+            "upper: " +
+            p.require_uppercase +
+            " | lower: " +
+            p.require_lowercase +
+            " | digit: " +
+            p.require_digit +
+            " | special: " +
+            p.require_special;
+        }
+        apiGet("/security/policy")
+          .then(function (p) {
+            renderPolicyView(p);
+            polMin.value = p.min_length;
+            polU.checked = p.require_uppercase;
+            polL.checked = p.require_lowercase;
+            polD.checked = p.require_digit;
+            polS.checked = p.require_special;
+            if (window.CON4MITY_I18N && window.CON4MITY_I18N.applyTranslations) window.CON4MITY_I18N.applyTranslations();
+          })
+          .catch(function () {
+            policyView.textContent = "—";
+          });
+
+        document.getElementById("form-policy").onsubmit = function (e) {
+          e.preventDefault();
+          apiPut("/security/policy", {
+            min_length: parseInt(polMin.value, 10) || 12,
+            require_uppercase: polU.checked,
+            require_lowercase: polL.checked,
+            require_digit: polD.checked,
+            require_special: polS.checked,
+          })
+            .then(function (p) {
+              renderPolicyView(p);
+              showMessage(
+                (window.t && window.t("security.saved")) || "Politique enregistrée.",
+                true
+              );
+            })
+            .catch(function (err) {
+              showMessage(err.message || "Erreur", false);
+            });
+        };
+
+        document.getElementById("form-pwd").onsubmit = function (e) {
+          e.preventDefault();
+          var o = document.getElementById("pw-old").value;
+          var n = document.getElementById("pw-new").value;
+          apiPost("/security/change-password", { current_password: o, new_password: n })
+            .then(function (r) {
+              document.getElementById("pw-old").value = "";
+              document.getElementById("pw-new").value = "";
+              showMessage((r && r.message) || "OK", true);
+            })
+            .catch(function (err) {
+              showMessage(err.message || "Erreur", false);
+            });
+        };
+
+        document.getElementById("form-key").onsubmit = function (e) {
+          e.preventDefault();
+          var nm = (document.getElementById("key-name").value || "default").trim() || "default";
+          var box = document.getElementById("sec-key-secret");
+          apiPost("/security/api-keys", { name: nm })
+            .then(function (r) {
+              box.style.display = "block";
+              box.textContent = (r.message || "") + "\n\n" + (r.secret || "");
+              if (window.CON4MITY_I18N && window.CON4MITY_I18N.applyTranslations) window.CON4MITY_I18N.applyTranslations();
+            })
+            .catch(function (err) {
+              showMessage(err.message || "Erreur", false);
+            });
+        };
+
+        function fillLogs(items) {
+          var tbody = document.getElementById("sec-logs-body");
+          var table = document.getElementById("sec-logs-table");
+          var empty = document.getElementById("sec-logs-empty");
+          tbody.innerHTML = "";
+          if (!items || !items.length) {
+            table.style.display = "none";
+            empty.style.display = "block";
+            return;
+          }
+          empty.style.display = "none";
+          table.style.display = "table";
+          items.forEach(function (r) {
+            var tr = document.createElement("tr");
+            var ts = r.ts;
+            if (ts && typeof ts === "string") {
+              tr.innerHTML =
+                "<td>" +
+                esc(ts) +
+                "</td><td>" +
+                esc(r.username) +
+                "</td><td>" +
+                (r.success ? "✓" : "✗") +
+                "</td><td>" +
+                esc(r.reason) +
+                "</td><td>" +
+                esc(r.ip) +
+                "</td><td>" +
+                esc(r.geo) +
+                "</td>";
+            } else {
+              tr.textContent = JSON.stringify(r);
+            }
+            tbody.appendChild(tr);
+          });
+        }
+        function fillKeys(list) {
+          var ul = document.getElementById("sec-keys-list");
+          var empty = document.getElementById("sec-keys-empty");
+          ul.innerHTML = "";
+          if (!list || !list.length) {
+            empty.style.display = "block";
+            return;
+          }
+          empty.style.display = "none";
+          list.forEach(function (k) {
+            var li = document.createElement("li");
+            li.style.marginBottom = "0.5rem";
+            li.style.display = "flex";
+            li.style.alignItems = "center";
+            li.style.gap = "0.5rem";
+            li.style.flexWrap = "wrap";
+            var id = k.id;
+            li.innerHTML =
+              "<code>" + esc(k.key_prefix) + "</code> <span class=\"muted\">" + esc(k.name) + " — " + esc(k.owner) + "</span> ";
+            var b = document.createElement("button");
+            b.className = "btn btn--ghost";
+            b.type = "button";
+            b.setAttribute("data-i18n", "security.keys.revoke");
+            b.textContent = "Révoquer";
+            b.dataset.id = id;
+            b.onclick = function () {
+              if (!id) return;
+              if (!window.confirm("Révoquer cette clé ?")) return;
+              apiDelete("/security/api-keys/" + id)
+                .then(function () {
+                  return loadKeys();
+                })
+                .catch(function (err) {
+                  showMessage(err.message, false);
+                });
+            };
+            li.appendChild(b);
+            ul.appendChild(li);
+          });
+          if (window.CON4MITY_I18N && window.CON4MITY_I18N.applyTranslations) window.CON4MITY_I18N.applyTranslations();
+        }
+        function loadKeys() {
+          return apiGet("/security/api-keys")
+            .then(function (d) {
+              fillKeys((d && d.items) || []);
+            })
+            .catch(function (err) {
+              showMessage(err.message, false);
+            });
+        }
+        function loadLogs() {
+          return apiGet("/security/login-events", { page: 1, page_size: 100 })
+            .then(function (d) {
+              fillLogs((d && d.items) || []);
+              var foot = document.getElementById("sec-logs-footer");
+              if (foot) foot.textContent = d.total != null ? "Total : " + d.total : "";
+            })
+            .catch(function () {
+              fillLogs([]);
+            });
+        }
+
+        apiGet("/security/session")
+          .then(function (s) {
+            var isAdmin = (s.role || "") === "admin";
+            if (isAdmin) {
+              adminPolicy.style.display = "block";
+              secLogs.style.display = "block";
+              secKeys.style.display = "block";
+              loadLogs();
+              loadKeys();
+            }
+            if (window.CON4MITY_I18N && window.CON4MITY_I18N.applyTranslations) window.CON4MITY_I18N.applyTranslations();
+          })
+          .catch(function () {
+            if (window.CON4MITY_I18N && window.CON4MITY_I18N.applyTranslations) window.CON4MITY_I18N.applyTranslations();
+          });
+      })();
+    </script>
+  </body>
+</html>
