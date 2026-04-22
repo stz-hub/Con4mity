@@ -10,6 +10,7 @@ En local : uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 from __future__ import annotations
 
 import asyncio
+import copy
 import csv
 import io
 import json
@@ -355,8 +356,23 @@ def _check_filebeat() -> dict[str, Any]:
         return {"ok": False, "error": str(e)[:120]}
 
 
+def _empty_alert_stats() -> dict[str, Any]:
+    return {
+        "new_alerts": 0,
+        "in_progress_alerts": 0,
+        "resolved_alerts": 0,
+        "total_alerts": 0,
+        "incidents_open": 0,
+        "critical_open": 0,
+    }
+
+
 def _stats_from_db() -> dict[str, Any]:
-    conn = pg_connect()
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        logger.warning("stats PG connect failed: %s", e)
+        return _empty_alert_stats()
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -377,17 +393,30 @@ def _stats_from_db() -> dict[str, Any]:
                 """
             )
             row = cur.fetchone()
+    except (pg_errors.UndefinedTable, pg_errors.UndefinedColumn) as e:
+        logger.warning("stats: table ou colonnes alerts manquants — lancer SQL 006 / migrations: %s", e)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return _empty_alert_stats()
+    except psycopg2.Error as e:
+        logger.warning("stats requête alerts: %s", e)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return _empty_alert_stats()
+    except Exception as e:
+        logger.exception("stats inattendu: %s", e)
+        return _empty_alert_stats()
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
     if not row:
-        return {
-            "new_alerts": 0,
-            "in_progress_alerts": 0,
-            "resolved_alerts": 0,
-            "total_alerts": 0,
-            "incidents_open": 0,
-            "critical_open": 0,
-        }
+        return _empty_alert_stats()
     return {
         "new_alerts": int(row[0] or 0),
         "in_progress_alerts": int(row[1] or 0),
@@ -537,6 +566,37 @@ class ChangePasswordIn(BaseModel):
 
 class ApiKeyCreateIn(BaseModel):
     name: str = Field("default", max_length=200)
+
+
+# Identifiants des blocs réordonnables sur la page Logs / tableau de bord (ordon = flex order)
+LOGS_PANEL_IDS: tuple[str, ...] = (
+    "intro",
+    "services",
+    "kpis",
+    "controls",
+    "charts",
+    "maps",
+    "logs_header",
+    "log_kpis",
+    "filters",
+    "stream",
+)
+
+
+class UserPreferencesOut(BaseModel):
+    theme: str = "dark"
+    locale: str | None = None
+    compact_mode: bool = False
+    dashboard: dict[str, Any] = Field(default_factory=dict)
+    updated_at: str | None = None
+    source: str = "default"
+
+
+class UserPreferencesUpdate(BaseModel):
+    theme: str | None = None
+    locale: str | None = None
+    compact_mode: bool | None = None
+    dashboard: dict[str, Any] | None = None
 
 
 # ---------- Auth ----------
@@ -1153,6 +1213,254 @@ def api_security_change_password(
     return {"ok": True, "message": "Mot de passe mis à jour. Reconnectez-vous sur les autres appareils si besoin."}
 
 
+def _default_dashboard_api() -> dict[str, Any]:
+    return {
+        "logs": {
+            "panel_order": list(LOGS_PANEL_IDS),
+            "charts_visible": True,
+            "ws_default": False,
+        }
+    }
+
+
+def _sanitize_logs_panel_order(order: list[Any] | None) -> list[str]:
+    allowed = list(LOGS_PANEL_IDS)
+    allowed_set = set(allowed)
+    if not order:
+        return list(allowed)
+    seen: set[str] = set()
+    out: list[str] = []
+    for x in order:
+        s = str(x).strip() if x is not None else ""
+        if s in allowed_set and s not in seen:
+            out.append(s)
+            seen.add(s)
+    for p in allowed:
+        if p not in seen:
+            out.append(p)
+    return out
+
+
+def _parse_dashboard_cell(raw: Any) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            o = json.loads(raw)
+            return o if isinstance(o, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _merge_dashboard_json(base: dict[str, Any], patch: dict[str, Any] | None) -> dict[str, Any]:
+    d = copy.deepcopy(base) if base else _default_dashboard_api()
+    if not patch:
+        return d
+    if not isinstance(patch, dict):
+        return d
+    logs_in = patch.get("logs")
+    if isinstance(logs_in, dict):
+        lg: dict[str, Any] = dict(d.get("logs") or {})
+        if "panel_order" in logs_in and isinstance(logs_in.get("panel_order"), list):
+            lg["panel_order"] = _sanitize_logs_panel_order(logs_in.get("panel_order"))
+        if "charts_visible" in logs_in:
+            lg["charts_visible"] = bool(logs_in.get("charts_visible"))
+        if "ws_default" in logs_in:
+            lg["ws_default"] = bool(logs_in.get("ws_default"))
+        d["logs"] = lg
+    return d
+
+
+def _prefs_out_defaults() -> UserPreferencesOut:
+    return UserPreferencesOut(
+        theme="dark",
+        locale=None,
+        compact_mode=False,
+        dashboard=_default_dashboard_api(),
+        updated_at=None,
+        source="default",
+    )
+
+
+def _row_to_user_prefs_out(r: dict[str, Any]) -> UserPreferencesOut:
+    upd = r.get("updated_at")
+    if hasattr(upd, "isoformat"):
+        uds = upd.isoformat()
+    else:
+        uds = str(upd) if upd else None
+    dash = _merge_dashboard_json(_default_dashboard_api(), _parse_dashboard_cell(r.get("dashboard")))
+    loc = (r.get("locale") or "").strip() if r.get("locale") is not None else ""
+    return UserPreferencesOut(
+        theme=((r.get("theme") or "dark").strip()[:16] or "dark"),
+        locale=loc[:8] if loc else None,
+        compact_mode=bool(r.get("compact_mode", False)),
+        dashboard=dash,
+        updated_at=uds,
+        source="db",
+    )
+
+
+@api.get("/me/preferences", response_model=UserPreferencesOut)
+def get_my_preferences(user: dict[str, Any] = Depends(require_user)):
+    """Préférences interface (thème, locale, ordre des panneaux) — stockées côté serveur."""
+    uid = _user_id_from_claims(user)
+    if not uid:
+        return _prefs_out_defaults()
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        logger.warning("GET /me/preferences: PG: %s", e)
+        return _prefs_out_defaults()
+    out: UserPreferencesOut = _prefs_out_defaults()
+    r: Any = None
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            try:
+                cur.execute(
+                    """
+                    SELECT theme, locale, compact_mode, dashboard, updated_at
+                    FROM user_preferences
+                    WHERE user_id = %s
+                    """,
+                    (uid,),
+                )
+            except pg_errors.UndefinedTable:
+                return _prefs_out_defaults()
+            r = cur.fetchone()
+    except psycopg2.Error as e:
+        logger.warning("GET /me/preferences: %s", e)
+        return _prefs_out_defaults()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    if r:
+        out = _row_to_user_prefs_out(dict(r))
+    return out
+
+
+@api.put("/me/preferences", response_model=UserPreferencesOut)
+def put_my_preferences(
+    body: UserPreferencesUpdate,
+    user: dict[str, Any] = Depends(require_user),
+):
+    """Met à jour les préférences (merge partiel : champs absents = inchangés)."""
+    uid = _user_id_from_claims(user)
+    if not uid:
+        raise HTTPException(
+            status_code=400,
+            detail="Reconnectez-vous pour un jeton avec id utilisateur (préférences par compte).",
+        )
+    if body.theme is not None and str(body.theme) not in ("dark", "light", "system"):
+        raise HTTPException(status_code=400, detail="theme: utiliser dark, light ou system")
+    loc_in = body.locale
+    if loc_in is not None and str(loc_in).strip() != "":
+        l2 = str(loc_in).strip().lower()[:8]
+        if l2 not in ("fr", "en", "es"):
+            raise HTTPException(status_code=400, detail="locale: fr, en ou es")
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        raise HTTPException(503, detail=f"Base indisponible: {e!s}"[:500]) from e
+    current_merged: UserPreferencesOut = _prefs_out_defaults()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            try:
+                cur.execute(
+                    "SELECT theme, locale, compact_mode, dashboard, updated_at FROM user_preferences WHERE user_id = %s",
+                    (uid,),
+                )
+            except pg_errors.UndefinedTable:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Migrations requises : exécuter backend/sql/007_user_preferences.sql",
+                ) from None
+            ex = cur.fetchone()
+        if ex:
+            current_merged = _row_to_user_prefs_out(dict(ex))
+    except HTTPException:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        raise
+    except psycopg2.Error as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        raise HTTPException(500, detail=str(e)) from e
+
+    new_theme = (
+        (body.theme or current_merged.theme or "dark") if body.theme is not None else (current_merged.theme or "dark")
+    )
+    new_theme = str(new_theme).strip()[:16] or "dark"
+    if body.locale is not None:
+        lraw = str(body.locale).strip().lower()[:8]
+        new_loc = lraw if lraw in ("fr", "en", "es") else None
+    else:
+        new_loc = current_merged.locale
+    new_compact = current_merged.compact_mode
+    if body.compact_mode is not None:
+        new_compact = bool(body.compact_mode)
+    if body.dashboard is not None and body.dashboard == {}:
+        new_dash = _default_dashboard_api()
+    elif body.dashboard is not None:
+        new_dash = _merge_dashboard_json(current_merged.dashboard, body.dashboard)
+    else:
+        new_dash = copy.deepcopy(current_merged.dashboard) or _default_dashboard_api()
+    if not new_dash.get("logs"):
+        new_dash = _merge_dashboard_json(_default_dashboard_api(), new_dash)
+
+    row: tuple[Any, ...] | None = None
+    try:
+        with conn.cursor() as cur2:
+            cur2.execute(
+                """
+                INSERT INTO user_preferences (user_id, theme, locale, compact_mode, dashboard, updated_at)
+                VALUES (%s, %s, %s, %s, %s::jsonb, NOW())
+                ON CONFLICT (user_id) DO UPDATE SET
+                    theme = EXCLUDED.theme,
+                    locale = EXCLUDED.locale,
+                    compact_mode = EXCLUDED.compact_mode,
+                    dashboard = EXCLUDED.dashboard,
+                    updated_at = NOW()
+                RETURNING theme, locale, compact_mode, dashboard, updated_at
+                """,
+                (uid, new_theme, new_loc, new_compact, json.dumps(new_dash)),
+            )
+            row = cur2.fetchone()
+        conn.commit()
+    except psycopg2.Error as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        row = None
+        raise HTTPException(500, detail=str(e)) from e
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    if not row:
+        return _prefs_out_defaults()
+    return _row_to_user_prefs_out(
+        {
+            "theme": row[0],
+            "locale": row[1],
+            "compact_mode": row[2],
+            "dashboard": row[3],
+            "updated_at": row[4],
+        }
+    )
+
+
 @api.post("/login", response_model=TokenOut)
 def login(request: Request, body: LoginBody):
     """Authentification classique : journal de connexions, anti-bruteforce (par IP+utilisateur)."""
@@ -1395,28 +1703,82 @@ def _alerts_list_query() -> str:
     """
 
 
+def _alerts_list_normalize(d: dict[str, Any]) -> dict[str, Any]:
+    d = dict(d)
+    st = d.get("status")
+    d["status"] = (st if st is not None and str(st).strip() else None) or "new"
+    d.setdefault("log_ids", None)
+    d.setdefault("status_note", "")
+    d.setdefault("last_actor", "")
+    if d.get("updated_at") is None and d.get("created_at") is not None:
+        d["updated_at"] = d["created_at"]
+    return d
+
+
+def _alerts_list_fetch_with_fallback(cur: Any) -> list[Any]:
+    """Enchaîne des SELECT compatibles schémas partiels (évite 500 en prod)."""
+    sqls = (
+        _alerts_list_query().strip(),
+        """
+        SELECT id, created_at, rule_name, severity, host, description, status, log_ids, updated_at
+        FROM alerts
+        ORDER BY created_at DESC NULLS LAST
+        LIMIT 200
+        """,
+        """
+        SELECT
+            id, created_at, rule_name, severity, host, description
+        FROM alerts
+        ORDER BY created_at DESC NULLS LAST
+        LIMIT 200
+        """,
+    )
+    last_err: Exception | None = None
+    for q in sqls:
+        try:
+            cur.execute(q)
+            return list(cur.fetchall() or [])
+        except pg_errors.UndefinedTable:
+            return []
+        except pg_errors.UndefinedColumn as e:
+            last_err = e
+            try:
+                cur.connection.rollback()  # type: ignore[union-attr]
+            except Exception:
+                pass
+            continue
+    if last_err:
+        logger.warning("alerts list: schéma incompatible: %s", last_err)
+    return []
+
+
 @api.get("/alerts")
 def get_alerts(user: dict = Depends(require_user)):
-    conn = pg_connect()
+    rows: list[dict[str, Any]] = []
+    try:
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        logger.warning("get_alerts: connexion PG: %s", e)
+        return []
     try:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(_alerts_list_query())
-                rows = cur.fetchall()
-        except pg_errors.UndefinedColumn:
-            conn.rollback()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    """
-                    SELECT id, created_at, rule_name, severity, host, description, status, log_ids, updated_at
-                    FROM alerts
-                    ORDER BY created_at DESC NULLS LAST
-                    LIMIT 200
-                    """
-                )
-                rows = cur.fetchall()
+                raw = _alerts_list_fetch_with_fallback(cur)
+        except pg_errors.UndefinedTable:
+            logger.warning("get_alerts: table alerts absente (SQL 006_alerts_bootstrap.sql)")
+            return []
+        except psycopg2.Error as e:
+            logger.warning("get_alerts: %s", e)
+            return []
+        rows = [_alerts_list_normalize(dict(x)) for x in raw]
+    except Exception as e:
+        logger.exception("get_alerts: %s", e)
+        return []
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
     return jsonable_encoder(rows)
 
 
@@ -1425,59 +1787,122 @@ def get_alerts_daily(
     user: dict = Depends(require_user),
     days: int = Query(30, ge=1, le=90),
 ):
-    conn = pg_connect()
+    rrows: list[tuple[Any, ...]] = []
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    (date_trunc('day', created_at))::date AS d,
-                    COUNT(*)::int
-                FROM alerts
-                WHERE created_at >= (NOW() - ((%s)::int * INTERVAL '1 day'))
-                GROUP BY 1
-                ORDER BY 1 ASC
-                """,
-                (days,),
-            )
-            rrows = cur.fetchall()
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        logger.warning("alerts/daily: connexion: %s", e)
+        return []
+    try:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        (date_trunc('day', created_at))::date AS d,
+                        COUNT(*)::int
+                    FROM alerts
+                    WHERE created_at >= (NOW() - ((%s)::int * INTERVAL '1 day'))
+                    GROUP BY 1
+                    ORDER BY 1 ASC
+                    """,
+                    (days,),
+                )
+                rrows = list(cur.fetchall() or [])
+        except (pg_errors.UndefinedTable, pg_errors.UndefinedColumn) as e:
+            logger.warning("alerts/daily: %s", e)
+        except psycopg2.Error as e:
+            logger.warning("alerts/daily: %s", e)
     finally:
-        conn.close()
-    return [{"date": str(r[0]), "count": r[1]} for r in (rrows or [])]
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return [{"date": str(r[0]), "count": r[1]} for r in rrows]
+
+
+def _alert_detail_fetch_with_fallback(cur: Any, alert_id: int) -> dict[str, Any] | None:
+    pairs: tuple[tuple[str, tuple[Any, ...]], ...] = (
+        (
+            """
+            SELECT
+                id, created_at, rule_name, severity, host, description, status, log_ids, updated_at,
+                COALESCE(status_note, '') AS status_note, COALESCE(last_actor, '') AS last_actor
+            FROM alerts
+            WHERE id = %s
+            """,
+            (alert_id,),
+        ),
+        (
+            """
+            SELECT id, created_at, rule_name, severity, host, description, status, log_ids, updated_at
+            FROM alerts
+            WHERE id = %s
+            """,
+            (alert_id,),
+        ),
+        (
+            """
+            SELECT id, created_at, rule_name, severity, host, description
+            FROM alerts
+            WHERE id = %s
+            """,
+            (alert_id,),
+        ),
+    )
+    last_col: Exception | None = None
+    for q, p in pairs:
+        try:
+            cur.execute(q, p)
+            r = cur.fetchone()
+            if not r:
+                return None
+            return _alerts_list_normalize(dict(r))
+        except pg_errors.UndefinedTable:
+            raise
+        except pg_errors.UndefinedColumn as e:
+            last_col = e
+            try:
+                cur.connection.rollback()  # type: ignore[union-attr]
+            except Exception:
+                pass
+            continue
+    if last_col:
+        logger.warning("alert detail: schéma %s: %s", alert_id, last_col)
+    return None
 
 
 @api.get("/alerts/{alert_id}")
 def get_alert_detail(alert_id: int, user: dict = Depends(require_user)):
-    conn = pg_connect()
     try:
-        row = None
+        conn = pg_connect()
+    except (psycopg2.Error, OSError) as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"PostgreSQL indisponible: {e!s}"[:500],
+        ) from e
+    row: dict[str, Any] | None = None
+    try:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    """
-                    SELECT
-                        id, created_at, rule_name, severity, host, description, status, log_ids, updated_at,
-                        COALESCE(status_note, '') AS status_note, COALESCE(last_actor, '') AS last_actor
-                    FROM alerts
-                    WHERE id = %s
-                    """,
-                    (alert_id,),
-                )
-                row = cur.fetchone()
-        except pg_errors.UndefinedColumn:
-            conn.rollback()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    """
-                    SELECT id, created_at, rule_name, severity, host, description, status, log_ids, updated_at
-                    FROM alerts
-                    WHERE id = %s
-                    """,
-                    (alert_id,),
-                )
-                row = cur.fetchone()
+                try:
+                    r = _alert_detail_fetch_with_fallback(cur, alert_id)
+                except pg_errors.UndefinedTable:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Table alerts absente — exécuter backend/sql/006_alerts_bootstrap.sql sur PostgreSQL",
+                    ) from None
+                row = r
+        except HTTPException:
+            raise
+        except psycopg2.Error as e:
+            logger.warning("get_alert_detail: %s", e)
+            raise HTTPException(503, detail="Erreur base alertes") from e
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
     if not row:
         raise HTTPException(status_code=404, detail="Alert not found")
     raw_ids = _parse_log_ids_field(row.get("log_ids"))

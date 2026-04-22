@@ -74,8 +74,9 @@ La route **`GET /api/logs`** renvoie des documents **enrichis** avec ces champs.
 
 ## 4. PostgreSQL — alertes et journal opérateur
 
-- **Alertes** : données dans la table **`alerts`** (compteurs sur Logs / Vue d’ensemble). Sans alimentation (règles, ETL, inserts de test), les compteurs restent à 0.
-- **Historique des actions** (page Automatisation) : exécuter le script **`backend/sql/003_operator_activity.sql`** sur la base PostgreSQL (voir aussi le **README** racine).
+- **Table `alerts`** : si elle n’existe pas, l’API ne peut pas servir le centre d’alertes. Créer la structure avec **`backend/sql/006_alerts_bootstrap.sql`**, puis au besoin **`001_alerts_updated_at.sql`** et **`004_alerts_status_note.sql`**. Enfin, alimenter la table (règles de détection, ETL, `INSERT` de test) — sans lignes, l’UI affiche 0 alerte mais ne doit plus renvoyer d’erreur 500.
+- **Préférences interface** (thème, langue, ordre des blocs du tableau de bord) : exécuter **`backend/sql/007_user_preferences.sql`** (sinon l’API retombe sur des réponses par défaut, sans stockage).
+- **Historique des actions** (page Automatisation) : exécuter **`backend/sql/003_operator_activity.sql`** sur la base (voir aussi le **README** racine).
 
 ---
 

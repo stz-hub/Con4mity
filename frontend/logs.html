@@ -32,18 +32,25 @@
         </div>
       </header>
 
-      <p class="muted" id="section-overview" style="scroll-margin-top: 5rem" data-i18n="logs.mergedHint">
+      <div id="dashboard-stack" class="dashboard-stack" style="display: flex; flex-direction: column; gap: 0">
+      <p
+        class="muted dashboard-panel"
+        data-dash-panel="intro"
+        id="section-overview"
+        style="scroll-margin-top: 5rem"
+        data-i18n="logs.mergedHint"
+      >
         Vue d’ensemble et flux de logs (page fusionnée)
       </p>
 
-      <section class="panel" style="margin-bottom: 1rem" id="block-services" aria-label="Services">
+      <section class="panel dashboard-panel" style="margin-bottom: 1rem" id="block-services" data-dash-panel="services" aria-label="Services">
         <div class="panel__head">
           <h2 data-i18n="services.title">État des services</h2>
         </div>
         <ul class="service-strip" id="service-strip" style="list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.75rem"></ul>
       </section>
 
-      <section class="kpis" id="kpi-row">
+      <section class="kpis dashboard-panel" id="kpi-row" data-dash-panel="kpis">
         <article class="kpi kpi--accent">
           <span class="kpi__label" data-i18n="overview.kpiIncidents">Incidents ouverts</span>
           <span class="kpi__value" id="kpi-incidents">—</span>
@@ -66,7 +73,7 @@
         </article>
       </section>
 
-      <section class="toggle-row" style="flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center">
+      <section class="toggle-row dashboard-panel" data-dash-panel="controls" style="flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center">
         <label><input type="checkbox" id="w-charts" checked /> <span data-i18n="overview.widgets">Graphiques</span></label>
         <label
           title="Désactivé par défaut : moins de charge. Utilisez « Rafraîchir » pour mettre à jour."
@@ -78,7 +85,7 @@
         <button type="button" class="btn btn--sm btn--primary" id="btn-refresh" data-i18n="overview.refresh">Rafraîchir</button>
       </section>
 
-      <div id="charts-wrap">
+      <div id="charts-wrap" class="dashboard-panel" data-dash-panel="charts">
         <section class="chart-grid" style="grid-template-columns: 1fr 1fr">
           <article class="chart-card">
             <h3 data-i18n="logs.realtimeVolume">Volume entrant (24 h) — OpenSearch</h3>
@@ -89,8 +96,9 @@
             <canvas id="chart-timeline" height="180"></canvas>
           </article>
         </section>
+      </div>
 
-        <section class="map-grid" style="margin: 1rem 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem">
+        <section id="block-maps" class="map-grid dashboard-panel" data-dash-panel="maps" style="margin: 1rem 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem">
           <div class="panel">
             <div class="panel__head"><h2 data-i18n="logs.top5hosts">Top 5 machines (échantillon)</h2></div>
             <ul class="ip-list" id="host-list-5"></ul>
@@ -100,12 +108,13 @@
             <ul class="ip-list" id="rule-list-5"></ul>
           </div>
         </section>
+
+      <div class="dashboard-panel" data-dash-panel="logs_header">
+        <h2 class="section-title" id="section-logs" style="margin-top: 2rem; scroll-margin-top: 4rem" data-i18n="nav.logs">Logs</h2>
+        <p class="muted" data-i18n="dashboard.subtitle">Dernières entrées indexées dans OpenSearch</p>
       </div>
 
-      <h2 class="section-title" id="section-logs" style="margin-top: 2rem; scroll-margin-top: 4rem" data-i18n="nav.logs">Logs</h2>
-      <p class="muted" data-i18n="dashboard.subtitle">Dernières entrées indexées dans OpenSearch</p>
-
-      <section class="kpis" style="margin-top: 0.5rem">
+      <section class="kpis dashboard-panel" data-dash-panel="log_kpis" style="margin-top: 0.5rem">
         <article class="kpi kpi--accent">
           <span class="kpi__label" data-i18n="logs.volBarTitle">Total / période (recherche)</span>
           <span class="kpi__value" id="kpi-total-logs">—</span>
@@ -116,7 +125,7 @@
         </article>
       </section>
 
-      <section class="panel" style="margin-bottom: 1rem">
+      <section class="panel dashboard-panel" data-dash-panel="filters" style="margin-bottom: 1rem">
         <div class="panel__head">
           <h2 data-i18n="logs.filtersTitle">Filtres</h2>
         </div>
@@ -160,7 +169,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel dashboard-panel" data-dash-panel="stream">
         <div class="panel__head">
           <h2 data-i18n="dashboard.heading">Flux</h2>
           <div class="panel__actions" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap">
@@ -198,6 +207,7 @@
           </table>
         </div>
       </section>
+      </div>
     </div>
 
     <div id="app-footer"></div>
@@ -211,7 +221,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="app.js?v=8"></script>
     <script src="i18n.js?v=7"></script>
-    <script src="theme.js?v=1"></script>
+    <script src="theme.js?v=2"></script>
+    <script src="preferences-sync.js?v=1"></script>
     <script src="nav.js?v=6"></script>
     <script src="footer.js?v=5"></script>
     <script src="log-fields.js?v=2"></script>
@@ -590,13 +601,24 @@
       const LS_CHARTS = "con4mity_show_charts";
       if (localStorage.getItem(LS_CHARTS) === "0") {
         document.getElementById("w-charts").checked = false;
-        document.getElementById("charts-wrap").style.display = "none";
+        var _cw = document.getElementById("charts-wrap");
+        var _mg = document.getElementById("block-maps");
+        if (_cw) _cw.style.display = "none";
+        if (_mg) _mg.style.display = "none";
       }
       document.getElementById("w-charts").onchange = function () {
         const on = document.getElementById("w-charts").checked;
         localStorage.setItem(LS_CHARTS, on ? "1" : "0");
-        document.getElementById("charts-wrap").style.display = on ? "" : "none";
+        const cw = document.getElementById("charts-wrap");
+        const mg = document.getElementById("block-maps");
+        if (cw) cw.style.display = on ? "" : "none";
+        if (mg) mg.style.display = on ? "" : "none";
         loadOverview().catch(function () {});
+        if (window.Con4mityPreferences && typeof getToken === "function" && getToken() && window.Con4mityPreferences.save) {
+          window.Con4mityPreferences.save({
+            dashboard: { logs: { charts_visible: on } },
+          }).catch(function () {});
+        }
       };
 
       window.addEventListener("con4mity-lang", function () {

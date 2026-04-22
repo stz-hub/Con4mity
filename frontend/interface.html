@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Con4mity — Interface</title>
+    <link rel="stylesheet" href="style.css?v=12" />
+  </head>
+  <body class="page" data-page-title-key="pageTitle.interface" data-nav-active="settings">
+    <div class="shell">
+      <header class="topbar">
+        <div class="topbar__left">
+          <img
+            class="topbar__logo"
+            src="assets/logo.png?v=5"
+            alt="Con4mity"
+            width="120"
+            height="44"
+            decoding="async"
+          />
+          <div class="topbar__titles">
+            <p class="brand-name">CON4MITY</p>
+            <p class="brand-sub">Open Source SIEM</p>
+          </div>
+        </div>
+        <div class="topbar__right">
+          <nav class="topbar__nav" aria-label="Main">
+            <div id="main-nav-links" class="nav-links"></div>
+          </nav>
+          <button type="button" class="btn btn--ghost" id="logout" data-i18n="nav.logout">Déconnexion</button>
+        </div>
+      </header>
+
+      <p class="muted" style="margin-bottom: 0.5rem">
+        <a href="settings.html" data-i18n="interface.backToSettings">← Paramètres</a>
+      </p>
+      <section class="page-intro">
+        <h1 data-i18n="interface.heading">Interface &amp; personnalisation</h1>
+        <p class="muted" data-i18n="interface.subtitle">Thème, langue, densité, ordre des blocs du tableau de bord — sauvegardés sur le serveur.</p>
+      </section>
+
+      <div id="iface-msg" class="panel" style="display: none; margin-bottom: 1rem; border-color: var(--accent)">
+        <p id="iface-msg-text" style="margin: 0"></p>
+      </div>
+
+      <section class="panel" style="margin-bottom: 1.25rem">
+        <h2 data-i18n="interface.appearance">Apparence</h2>
+        <fieldset class="interface-fieldset">
+          <legend class="visually-hidden" data-i18n="interface.themeLegend">Thème</legend>
+          <label class="interface-radio">
+            <input type="radio" name="iface-theme" value="dark" />
+            <span data-i18n="interface.themeDark">Sombre</span>
+          </label>
+          <label class="interface-radio">
+            <input type="radio" name="iface-theme" value="light" />
+            <span data-i18n="interface.themeLight">Clair</span>
+          </label>
+          <label class="interface-radio">
+            <input type="radio" name="iface-theme" value="system" />
+            <span data-i18n="interface.themeSystem">Système (auto)</span>
+          </label>
+        </fieldset>
+        <p class="muted" style="font-size: 0.85rem; margin-top: 0.75rem" data-i18n="interface.themeHelp">
+          « Système » suit le réglage de l’appareil (préférence couleur sombre / clair).
+        </p>
+        <label class="settings-lang-row" style="margin-top: 1rem; max-width: 24rem; align-items: center">
+          <input type="checkbox" id="iface-compact" />
+          <span data-i18n="interface.compact">Mode compact (espacement réduit)</span>
+        </label>
+      </section>
+
+      <section class="panel" style="margin-bottom: 1.25rem">
+        <h2 data-i18n="interface.langTitle">Langue de l’interface</h2>
+        <p class="muted" data-i18n="interface.langHelp">Même choix que dans Paramètres — synchronisé ici et sur le compte.</p>
+        <label class="settings-lang-row">
+          <span data-i18n="lang.label">Langue</span>
+          <select class="lang-select" id="iface-lang" style="min-width: 10rem" aria-label="Language">
+            <option value="fr" data-i18n="settings.lang.fr">Français</option>
+            <option value="en" data-i18n="settings.lang.en">English</option>
+            <option value="es" data-i18n="settings.lang.es">Español</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="panel" style="margin-bottom: 1.25rem">
+        <h2 data-i18n="interface.dashTitle">Tableau de bord (page Logs)</h2>
+        <p class="muted" data-i18n="interface.dashDesc">Faites glisser les blocs pour définir l’ordre d’affichage (haut → bas). Les graphiques et le WebSocket par défaut s’appliquent au prochain chargement.</p>
+        <label class="settings-lang-row" style="align-items: center; margin: 0.5rem 0">
+          <input type="checkbox" id="iface-charts-def" />
+          <span data-i18n="interface.chartsDef">Afficher les graphiques par défaut</span>
+        </label>
+        <label class="settings-lang-row" style="align-items: center; margin: 0.5rem 0 1rem">
+          <input type="checkbox" id="iface-ws-def" />
+          <span data-i18n="interface.wsDef">Activer le WebSocket (temps réel) par défaut</span>
+        </label>
+        <p class="brand-sub" data-i18n="interface.dndHint">Ordre :</p>
+        <ul id="iface-panels" class="iface-dnd" aria-label="order"></ul>
+      </section>
+
+      <div class="interface-actions" style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 2rem">
+        <button type="button" class="btn btn--primary" id="iface-save" data-i18n="interface.save">Enregistrer</button>
+        <button type="button" class="btn btn--ghost" id="iface-reset" data-i18n="interface.resetLocal">Réinitialiser (côté serveur — valeurs par défaut)</button>
+      </div>
+    </div>
+
+    <div id="app-footer"></div>
+    <script src="app.js?v=8"></script>
+    <script src="i18n.js?v=8"></script>
+    <script src="theme.js?v=2"></script>
+    <script src="preferences-sync.js?v=1"></script>
+    <script src="nav.js?v=6"></script>
+    <script src="footer.js?v=5"></script>
+    <script>
+      if (!getToken()) window.location.href = "index.html";
+      const PANEL_LABELS = {
+        fr: {
+          intro: "Introduction (texte d’aide)",
+          services: "État des services",
+          kpis: "Indicateurs (KPI) principaux",
+          controls: "Options graphiques / rafraîchissement",
+          charts: "Graphiques (volume, densité)",
+          maps: "Top machines & règles",
+          logs_header: "Titre section Logs",
+          log_kpis: "KPI volume logs",
+          filters: "Filtres de recherche",
+          stream: "Tableau des entrées (flux)",
+        },
+        en: {
+          intro: "Intro (hint text)",
+          services: "Service status",
+          kpis: "Main KPIs",
+          controls: "Chart options / refresh",
+          charts: "Charts (volume, density)",
+          maps: "Top hosts & rules",
+          logs_header: "Logs section title",
+          log_kpis: "Log volume KPIs",
+          filters: "Search filters",
+          stream: "Log entries table",
+        },
+        es: {
+          intro: "Introducción (texto)",
+          services: "Estado de servicios",
+          kpis: "KPIs principales",
+          controls: "Gráficos / actualizar",
+          charts: "Gráficos (volumen, densidad)",
+          maps: "Top hosts y reglas",
+          logs_header: "Título Logs",
+          log_kpis: "KPI volumen",
+          filters: "Filtros",
+          stream: "Tabla de eventos",
+        },
+      };
+      const ORDER = [
+        "intro",
+        "services",
+        "kpis",
+        "controls",
+        "charts",
+        "maps",
+        "logs_header",
+        "log_kpis",
+        "filters",
+        "stream",
+      ];
+      var dragEl = null;
+      var currentOrder = ORDER.slice();
+      var msgBox = document.getElementById("iface-msg");
+      var msgText = document.getElementById("iface-msg-text");
+      function showMsg(t, ok) {
+        msgBox.style.display = "block";
+        msgText.textContent = t;
+        msgBox.style.borderColor = ok ? "var(--ok)" : "var(--crit)";
+      }
+      function lang() {
+        try {
+          return localStorage.getItem("con4mity_lang") || "fr";
+        } catch (_) {
+          return "fr";
+        }
+      }
+      function panelLabel(id) {
+        const L = PANEL_LABELS[lang()] || PANEL_LABELS.en;
+        return L[id] || id;
+      }
+      function renderDnd() {
+        const ul = document.getElementById("iface-panels");
+        ul.innerHTML = "";
+        currentOrder.forEach(function (id) {
+          const li = document.createElement("li");
+          li.className = "iface-dnd__item";
+          li.draggable = true;
+          li.dataset.panelId = id;
+          li.textContent = panelLabel(id);
+          li.setAttribute("role", "listitem");
+          li.addEventListener("dragstart", function (e) {
+            dragEl = li;
+            e.dataTransfer.effectAllowed = "move";
+            li.classList.add("iface-dnd__item--drag");
+          });
+          li.addEventListener("dragend", function () {
+            li.classList.remove("iface-dnd__item--drag");
+            dragEl = null;
+          });
+          li.addEventListener("dragover", function (e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            if (!dragEl || dragEl === li) return;
+            const rect = li.getBoundingClientRect();
+            const before = (e.clientY - rect.top) < rect.height / 2;
+            const parent = li.parentNode;
+            if (before) parent.insertBefore(dragEl, li);
+            else parent.insertBefore(dragEl, li.nextSibling);
+          });
+          li.addEventListener("drop", function (e) {
+            e.preventDefault();
+            const ids = [].map.call(ul.querySelectorAll(".iface-dnd__item"), function (n) {
+              return n.dataset.panelId;
+            });
+            if (ids.length) currentOrder = ids;
+          });
+          ul.appendChild(li);
+        });
+      }
+      function fillForm(p) {
+        const t = p.theme || "dark";
+        document.querySelectorAll('input[name="iface-theme"]').forEach(function (r) {
+          r.checked = r.value === t;
+        });
+        document.getElementById("iface-compact").checked = !!p.compact_mode;
+        const lo = p.locale || "fr";
+        document.getElementById("iface-lang").value = lo;
+        const lg = (p.dashboard && p.dashboard.logs) || {};
+        document.getElementById("iface-charts-def").checked = lg.charts_visible !== false;
+        document.getElementById("iface-ws-def").checked = !!lg.ws_default;
+        if (Array.isArray(lg.panel_order) && lg.panel_order.length) {
+          const seen = new Set();
+          const merged = [];
+          lg.panel_order.forEach(function (x) {
+            if (ORDER.indexOf(x) >= 0 && !seen.has(x)) {
+              merged.push(x);
+              seen.add(x);
+            }
+          });
+          ORDER.forEach(function (x) {
+            if (!seen.has(x)) merged.push(x);
+          });
+          currentOrder = merged;
+        } else {
+          currentOrder = ORDER.slice();
+        }
+        renderDnd();
+      }
+      document.getElementById("logout").onclick = function () {
+        localStorage.removeItem("con4mity_token");
+        window.location.href = "index.html";
+      };
+      document.getElementById("iface-save").onclick = function () {
+        let th = "dark";
+        document.querySelectorAll('input[name="iface-theme"]').forEach(function (r) {
+          if (r.checked) th = r.value;
+        });
+        const loc = document.getElementById("iface-lang").value;
+        const ids = [].map.call(
+          document.getElementById("iface-panels").querySelectorAll(".iface-dnd__item"),
+          function (n) {
+            return n.dataset.panelId;
+          }
+        );
+        const body = {
+          theme: th,
+          locale: loc,
+          compact_mode: document.getElementById("iface-compact").checked,
+          dashboard: {
+            logs: {
+              panel_order: ids.length ? ids : currentOrder.slice(),
+              charts_visible: document.getElementById("iface-charts-def").checked,
+              ws_default: document.getElementById("iface-ws-def").checked,
+            },
+          },
+        };
+        (window.Con4mityPreferences && window.Con4mityPreferences.save
+          ? window.Con4mityPreferences.save(body)
+          : apiPut("/me/preferences", body)
+        )
+          .then(function () {
+            showMsg(
+              (typeof window.t === "function" && window.t("interface.saved")) || "Enregistré.",
+              true
+            );
+            if (window.CON4MITY_I18N && window.CON4MITY_I18N.setLang) window.CON4MITY_I18N.setLang(loc);
+          })
+          .catch(function (e) {
+            showMsg((e && e.message) || "Erreur", false);
+          });
+      };
+      document.getElementById("iface-reset").onclick = function () {
+        if (!window.confirm("Rétablir thème, langue et disposition par défaut (serveur) ?")) return;
+        const body = {
+          theme: "dark",
+          locale: "fr",
+          compact_mode: false,
+          dashboard: {},
+        };
+        (window.Con4mityPreferences ? window.Con4mityPreferences.save(body) : apiPut("/me/preferences", body))
+          .then(function (p) {
+            fillForm(p);
+            if (p.locale && window.CON4MITY_I18N && window.CON4MITY_I18N.setLang) window.CON4MITY_I18N.setLang(p.locale);
+            showMsg("OK", true);
+          })
+          .catch(function (e) {
+            showMsg((e && e.message) || "Erreur", false);
+          });
+      };
+      window.addEventListener("con4mity-lang", function () {
+        renderDnd();
+      });
+      (function init() {
+        if (window.Con4mityPreferences && Con4mityPreferences.pull) {
+          Con4mityPreferences.pull()
+            .then(function (p) {
+              if (p) fillForm(p);
+              else {
+                return apiGet("/me/preferences")
+                  .then(function (p2) {
+                    if (p2) fillForm(p2);
+                    else fillForm({ theme: "dark", locale: "fr" });
+                  })
+                  .catch(function () {
+                    fillForm({ theme: "dark", locale: "fr" });
+                  });
+              }
+            })
+            .catch(function () {
+              fillForm({ theme: "dark", locale: "fr" });
+            });
+        } else {
+          apiGet("/me/preferences")
+            .then(function (p) {
+              fillForm(p);
+            })
+            .catch(function () {
+              fillForm({ theme: "dark", locale: "fr" });
+            });
+        }
+        if (window.CON4MITY_I18N && window.CON4MITY_I18N.applyTranslations) window.CON4MITY_I18N.applyTranslations();
+      })();
+    </script>
+  </body>
+</html>

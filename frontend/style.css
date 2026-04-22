@@ -1085,3 +1085,71 @@ html[data-theme="light"] {
   font-weight: 700;
   margin: 0 0 0.25rem;
 }
+
+/* Préférences interface — mode compact, réordonnancement dashboard */
+body.layout-compact .topbar {
+  padding: 0.4rem 0;
+}
+body.layout-compact .page {
+  padding-bottom: 1rem;
+}
+body.layout-compact .kpi {
+  padding: 0.4rem 0.65rem;
+}
+body.layout-compact .panel {
+  margin-bottom: 0.75rem;
+}
+body.layout-compact .chart-card {
+  padding: 0.5rem 0.65rem;
+}
+
+.dashboard-panel {
+  position: relative;
+}
+
+.interface-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+}
+.interface-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.iface-dnd {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  max-width: 36rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+.iface-dnd__item {
+  padding: 0.65rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  font-size: 0.9rem;
+}
+.iface-dnd__item:last-child {
+  border-bottom: 0;
+}
+.iface-dnd__item--drag {
+  opacity: 0.65;
+}
+.iface-dnd__item:hover {
+  background: var(--panel);
+}
+@media (max-width: 600px) {
+  .interface-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
