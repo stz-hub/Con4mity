@@ -1,0 +1,98 @@
+﻿CON4MITY
+SIEM Open Source pour PME
+JEAN PIERRE MIRANDA
+Détection & Règles de Sécurité
+CT 102 · 192.168.0.102
+OTERIA · Promo 2025-2026
+
+Contexte du projet
+Con4mity est un SIEM open source pour PME. Le Pi 5 (8 Go RAM) fait tourner tous les services. La brique de Jean Pierre est ce qui donne au SIEM son intelligence - sans règles de détection, on stocke des logs mais on ne détecte rien.
+
+Rôle de Jean Pierre
+Une fois que les logs sont dans OpenSearch, il faut définir ce qui est normal et ce qui est dangereux. C'est le travail de l'expert sécurité. Il configure ElastAlert2 qui surveille OpenSearch en permanence, et il écrit les règles qui déclenchent les alertes.
+La difficulté principale c'est le calibrage. Une règle trop sensible génère des dizaines de fausses alertes par jour - le client finit par les ignorer et le SIEM devient inutile. Une règle trop permissive rate des attaques réelles. Il faut trouver le bon équilibre pour un contexte PME.
+Exemple concret : une règle 'connexion SSH le week-end = alerte' serait trop agressive. Beaucoup de techniciens IT font de la maintenance le week-end. Une meilleure règle serait '10 tentatives SSH échouées en 60 secondes = brute-force probable'.
+
+Accès et informations
+InformationValeurCT ProxmoxCT 102IP du CT192.168.0.102Accès Proxmoxhttps://con4mity.duckdns.org:33000Login Proxmoxjp ou jp@pve - choisir pve dans le menu RealmMot de passe ProxmoxJeanPierre@Accès au CTDans Proxmox : cliquer sur CT 102 → Console, ou Shell → pct enter 102Dossier projet/opt/con4mity/OpenSearch (Nikita)http://192.168.0.101:9200 - index con4mity-logs-*PostgreSQL (BDD)192.168.0.104:5432 - table alerts - user: con4mity / Con4mity2024Règles SigmaDépôt officiel : github.com/SigmaHQ/sigma
+Ce qui est déjà en place
+ÉlémentÉtatDockerInstallé et actif sur CT 102OpenSearchTourne sur 192.168.0.101:9200 - logs indexés dans con4mity-logs-*PostgreSQLTourne sur CT 104 - table alerts prête à recevoir les alertesRéseauCT 102 peut accéder à OpenSearch et PostgreSQL
+Outils utilisés
+ElastAlert2
+Moteur de détection open source qui surveille OpenSearch en permanence. Il vérifie les règles à intervalle régulier (configurable - toutes les minutes par exemple). Dès qu'une règle matche, il déclenche une action : écriture dans PostgreSQL, notification Discord, ou les deux. Il se configure via un fichier elastalert.yml et lit toutes les règles dans un dossier dédié.
+
+Format Sigma
+Standard de l'industrie pour écrire des règles de détection SIEM. Une règle Sigma est un fichier YAML qui décrit un pattern à détecter de façon indépendante de l'outil utilisé. Le dépôt SigmaHQ sur GitHub contient des milliers de règles communautaires. L'avantage : les règles Sigma peuvent être converties pour fonctionner avec d'autres outils si on change de SIEM.
+Attention importante : on ne peut pas importer tout le dépôt en bloc. Chaque règle doit être lue, comprise, testée et adaptée au contexte PME. Une règle faite pour une grande entreprise avec un Active Directory peut générer des centaines de faux positifs dans une PME de 20 personnes.
+
+Discord webhook (phase dev)
+Pendant le développement, les alertes déclenchées par ElastAlert2 sont envoyées sur Discord. C'est pratique pour tester rapidement - on voit tout de suite si une règle se déclenche. En production, les alertes seront intégrées dans le dashboard de Rayan et plus aucune donnée ne sortira vers Discord.
+
+Missions
+
+Mission 1  -  Créer la structure du projet
+Pourquoi : 
+ElastAlert2 a besoin d'un dossier pour ses règles et d'un fichier de configuration. Sans cette structure, le service ne peut pas démarrer.
+Ce qu'il faut faire :
+• Se connecter au CT 102 : pct enter 102 depuis le shell Proxmox
+• Créer les dossiers : mkdir -p /opt/con4mity/rules et mkdir -p /opt/con4mity/config
+• Se placer dans le dossier : cd /opt/con4mity
+• Vérifier que le CT peut accéder à OpenSearch : curl http://192.168.0.101:9200
+Mission 2  -  Configurer ElastAlert2
+Pourquoi : 
+Le fichier elastalert.yml indique à ElastAlert2 où se trouve OpenSearch, à quelle fréquence vérifier les règles, et où stocker son état interne. Sans ce fichier, ElastAlert2 ne peut pas démarrer.
+Ce qu'il faut faire :
+• Créer le fichier /opt/con4mity/config/elastalert.yml
+• Indiquer l'adresse d'OpenSearch : es_host: 192.168.0.101 et es_port: 9200
+• Définir le dossier de règles : rules_folder: /opt/elastalert/rules
+• Définir la fréquence de vérification : run_every: minutes: 1 (toutes les minutes)
+• Définir la fenêtre tampon : buffer_time: minutes: 15 (cherche dans les 15 dernières minutes)
+• Définir l'index de statut interne : writeback_index: elastalert_status
+Mission 3  -  Créer le docker-compose.yml et lancer ElastAlert2
+Pourquoi : 
+ElastAlert2 tourne dans un conteneur Docker. Le docker-compose.yml monte le dossier de règles et le fichier de config dans le conteneur. L'avantage : on peut ajouter et modifier des règles sans redémarrer le service.
+Ce qu'il faut faire :
+• Créer le fichier /opt/con4mity/docker-compose.yml
+• Définir un service elastalert qui utilise l'image jertel/elastalert2:latest
+• Monter le dossier de règles : ./rules vers /opt/elastalert/rules dans le conteneur
+• Monter le fichier de config : ./config/elastalert.yml vers /opt/elastalert/config.yml
+• Ajouter restart: unless-stopped
+• Lancer : docker-compose up -d
+• Vérifier les logs : docker-compose logs -f - ElastAlert2 doit afficher 'Starting up' sans erreur
+Mission 4  -  Écrire et tester la première règle (SSH brute-force)
+Pourquoi : 
+La première règle sert à valider que tout le pipeline fonctionne. Le SSH brute-force c'est l'attaque la plus courante en PME - des scripts automatisés testent des milliers de combinaisons login/mot de passe. C'est la règle la plus importante à avoir.
+Ce qu'il faut faire :
+• Créer le fichier /opt/con4mity/rules/ssh_brute_force.yml
+• Définir le type de règle : type: frequency (se déclenche si X événements en Y temps)
+• Définir l'index à surveiller : index: con4mity-logs-*
+• Définir le seuil : 10 tentatives échouées (message contenant 'Failed password') en 60 secondes
+• Définir l'alerte : notifier sur Discord (webhook) et écrire dans la table alerts de PostgreSQL
+• Tester la règle : générer plus de 10 faux échecs SSH depuis la ligne de commande
+• Vérifier que l'alerte remonte sur Discord et apparaît dans PostgreSQL
+Mission 5  -  Écrire les 20 règles de détection
+Pourquoi : 
+20 règles minimum couvrant les attaques les plus courantes en PME. Chaque règle doit être testée - une règle non testée ne vaut rien, on ne sait pas si elle fonctionne.
+Ce qu'il faut faire :
+• Règle 1 - SSH brute-force : plus de 10 tentatives échouées en 60 secondes sur un même host
+• Règle 2 - RDP brute-force : plus de 5 tentatives échouées sur le port 3389 en 60 secondes
+• Règle 3 - Scan de ports : plus de 20 connexions vers des ports différents depuis la même IP en 30 secondes
+• Règle 4 - Connexion depuis une nouvelle IP jamais vue : comparer avec l'historique des IPs sources connues
+• Règle 5 - Multiples échecs Windows (Event ID 4625) : plus de 5 en 2 minutes
+• Règle 6 - Escalade de privilèges Linux : commande sudo par un utilisateur qui ne l'a jamais utilisé
+• Règle 7 - Accès aux fichiers sensibles : accès à /etc/passwd, /etc/shadow, /etc/sudoers
+• Règle 8 - Création d'un nouvel utilisateur Linux : commande useradd ou adduser
+• Règle 9 - Connexion root directe en SSH : SSH réussi avec l'utilisateur root
+• Règle 10 - Transfert de données important : upload sortant supérieur à 100 Mo en peu de temps
+• Règles 11 à 20 - Adapter depuis le dépôt SigmaHQ en sélectionnant des règles pertinentes pour une PME
+• Pour chaque règle : tester en simulant l'événement, vérifier que l'alerte se déclenche, vérifier qu'elle ne se déclenche pas en situation normale
+Mission 6  -  Documenter chaque règle
+Pourquoi : 
+Chaque règle doit être documentée pour la maintenance. Si une règle génère des faux positifs chez un client, il faut pouvoir la modifier ou la désactiver rapidement sans tout casser.
+Ce qu'il faut faire :
+• Créer un fichier REGLES.md dans /opt/con4mity/
+• Pour chaque règle documenter : ce qu'elle détecte, pourquoi c'est dangereux, comment elle fonctionne techniquement, les faux positifs connus et comment les gérer, comment la désactiver si besoin
+• Exemple de faux positif à documenter : la règle SSH brute-force peut se déclencher si un administrateur rate plusieurs fois son mot de passe - ce n'est pas une attaque
+• Indiquer le niveau de confiance de chaque règle (haute / moyenne / faible) et le niveau de sévérité (critique / élevé / moyen / faible)
+Con4mity · Fiche Jean Pierre · Détection & Règles · OTERIA 2025-2026
+
