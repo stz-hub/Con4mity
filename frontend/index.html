@@ -4,63 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Con4mity — Connexion</title>
-    <link rel="stylesheet" href="style.css?v=10" />
+    <link rel="stylesheet" href="style.css?v=11" />
   </head>
   <body class="page page--center" data-page-title-key="pageTitle.login">
-    <!-- Filtre SVG « electric border » (turbulence + displacement) — inspiré freefrontend / CodePen -->
-    <!-- 1×1 + pas de overflow:hidden : sinon Chrome peut ignorer filter:url(#…) sur du HTML -->
-    <svg
-      class="login-electric-filters"
-      width="1"
-      height="1"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <filter
-          id="con4mity-electric"
-          x="-60%"
-          y="-60%"
-          width="220%"
-          height="220%"
-          color-interpolation-filters="sRGB"
-        >
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.045"
-            numOctaves="3"
-            seed="2"
-            result="noise"
-          >
-            <animate
-              attributeName="baseFrequency"
-              dur="2.2s"
-              values="0.032;0.09;0.045"
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="seed"
-              dur="3.5s"
-              values="2;31;2"
-              repeatCount="indefinite"
-            />
-          </feTurbulence>
-          <!-- Contraste sur le bruit = déplacements plus « foudre », moins lisse -->
-          <feComponentTransfer in="noise" result="noiseSharp">
-            <feFuncR type="linear" slope="2.4" intercept="-0.35" />
-            <feFuncG type="linear" slope="2.4" intercept="-0.35" />
-          </feComponentTransfer>
-          <feDisplacementMap
-            in="SourceGraphic"
-            in2="noiseSharp"
-            scale="56"
-            xChannelSelector="R"
-            yChannelSelector="G"
-          />
-        </filter>
-      </defs>
-    </svg>
-
     <div class="login-toolbar">
       <label class="login-lang-label">
         <span class="visually-hidden" data-i18n="lang.label">Langue</span>
@@ -72,60 +18,42 @@
       </label>
     </div>
 
-    <div class="login-electric-wrap">
-      <div class="login-electric-ring" aria-hidden="true"></div>
+    <div class="login-wrap">
       <main class="card login-card">
-      <img
-        src="assets/logo.png?v=5"
-        alt="Con4mity"
-        class="login-logo"
-        width="220"
-        height="120"
-        decoding="async"
-      />
-      <p class="tagline" data-i18n="login.tagline">
-        SIEM open source — connexion opérateur
-      </p>
-      <p class="muted" style="font-size: 0.8rem; margin-top: -0.25rem" data-i18n="login.langHint"></p>
-      <form id="login-form" class="stack">
-        <label>
-          <span data-i18n="login.username">Identifiant</span>
-          <input name="username" type="text" autocomplete="username" required />
-        </label>
-        <label>
-          <span data-i18n="login.password">Mot de passe</span>
-          <input
-            name="password"
-            type="password"
-            autocomplete="current-password"
-            required
-          />
-        </label>
-        <button type="submit" class="btn btn--primary btn--shine">
-          <span data-i18n="login.submit">Se connecter</span>
-          <svg
-            class="btn--shine__icon"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden="true"
-          >
-            <path
-              d="M9 6l6 6-6 6"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+        <img
+          src="assets/logo.png?v=5"
+          alt="Con4mity"
+          class="login-logo"
+          width="220"
+          height="120"
+          decoding="async"
+        />
+        <p class="tagline" data-i18n="login.tagline">
+          SIEM open source — connexion opérateur
+        </p>
+        <p class="muted" style="font-size: 0.8rem; margin-top: -0.25rem" data-i18n="login.langHint"></p>
+        <form id="login-form" class="stack">
+          <label>
+            <span data-i18n="login.username">Identifiant</span>
+            <input name="username" type="text" autocomplete="username" required />
+          </label>
+          <label>
+            <span data-i18n="login.password">Mot de passe</span>
+            <input
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
             />
-          </svg>
-        </button>
-        <p id="login-error" class="error" hidden></p>
-      </form>
-      <p class="login-footer" data-i18n="login.footer">
-        Espace réservé aux opérateurs autorisés.
-      </p>
+          </label>
+          <button type="submit" class="btn btn--primary login-submit">
+            <span data-i18n="login.submit">Se connecter</span>
+          </button>
+          <p id="login-error" class="error" hidden></p>
+        </form>
+        <p class="login-footer" data-i18n="login.footer">
+          Espace réservé aux opérateurs autorisés.
+        </p>
       </main>
     </div>
 

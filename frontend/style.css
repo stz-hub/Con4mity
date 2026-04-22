@@ -78,70 +78,49 @@ body {
   box-shadow: var(--shadow);
 }
 
-.login-card {
-  text-align: center;
-}
-
-/* Filtre SVG : rester dans le document sans être masqué (réf. filter: url(#con4mity-electric)) */
-.login-electric-filters {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 1px;
-  height: 1px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  overflow: visible;
-  pointer-events: none;
-  opacity: 0;
-  z-index: -1;
-}
-
-/* Bordure « electric » bleue : anneau déformé par feTurbulence + feDisplacementMap */
-.login-electric-wrap {
+/* Page connexion : halo bleu très léger (pur CSS, sans SVG) */
+.login-wrap {
   position: relative;
   width: min(100%, 400px);
 }
 
-.login-electric-ring {
+.login-wrap::before {
+  content: "";
   position: absolute;
-  inset: -6px;
+  inset: -3px;
   z-index: 0;
+  border-radius: calc(var(--radius) + 3px);
   pointer-events: none;
-  border-radius: calc(var(--radius) + 6px);
-  /* Bandes contrastées : le displacement déforme des arêtes nettes → effet « foudre » */
-  background: repeating-linear-gradient(
-    112deg,
-    #020617 0px,
-    #020617 4px,
-    #1e3a8a 4px,
-    #1e3a8a 6px,
-    #38bdf8 6px,
-    #38bdf8 7px,
-    #f0f9ff 7px,
-    #f0f9ff 8px,
-    #38bdf8 8px,
-    #38bdf8 10px,
-    #1d4ed8 10px,
-    #1d4ed8 14px,
-    #020617 14px,
-    #020617 18px
+  background: radial-gradient(
+    ellipse 100% 50% at 50% 8%,
+    rgba(43, 140, 255, 0.09),
+    transparent 65%
   );
-  background-size: 220% 220%;
-  animation: login-electric-shift 2.8s linear infinite;
-  filter: url(#con4mity-electric);
-  /* Halo séparé : gros blur sur l’élément filtré lisse tout l’effet */
-  box-shadow: 0 0 18px rgba(59, 130, 246, 0.35);
+  opacity: 0.4;
+  animation: login-halo-soft 7s ease-in-out infinite;
 }
 
-@keyframes login-electric-shift {
-  0% {
-    background-position: 0% 40%;
-  }
+@keyframes login-halo-soft {
+  0%,
   100% {
-    background-position: 100% 60%;
+    opacity: 0.22;
   }
+  50% {
+    opacity: 0.38;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-wrap::before {
+    animation: none;
+    opacity: 0.2;
+  }
+}
+
+/* Variante : aucun halo (ajouter class="login-wrap login-wrap--plain" sur le conteneur) */
+.login-wrap--plain::before {
+  content: none;
+  animation: none;
 }
 
 .card.login-card {
@@ -149,20 +128,11 @@ body {
   z-index: 1;
   width: 100%;
   margin: 0;
+  text-align: center;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
   box-shadow: var(--shadow);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .login-electric-ring {
-    animation: none;
-    filter: none;
-    background: linear-gradient(135deg, #1e40af, #3b82f6, #60a5fa);
-    background-size: 100% 100%;
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.35);
-  }
 }
 
 .login-logo {
@@ -235,95 +205,9 @@ select:focus {
   background: var(--accent-hover);
 }
 
-/* Uiverse shine button — https://uiverse.io/adeladel522/giant-earwig-69 (login submit) */
-.btn--shine {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.625rem;
+.login-submit {
   width: 100%;
-  padding-block: 0.5rem;
-  padding-inline: 1.25rem;
-  border-radius: 9999px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  outline: none;
-  overflow: hidden;
-  font-size: 0.94rem;
-  font-weight: 700;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-  transition: transform 0.3s ease-in-out, border-color 0.3s ease-in-out, background 0.3s ease-in-out,
-    box-shadow 0.3s ease-in-out;
-}
-
-.btn--shine .btn--shine__icon {
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  transition: transform 0.3s ease-in-out;
-}
-
-.btn--shine:hover {
-  transform: scale(1.05);
-  border-color: rgba(255, 255, 255, 0.6);
-  background: var(--accent-hover);
-}
-
-.btn--shine:hover .btn--shine__icon {
-  transform: translateX(4px);
-}
-
-.btn--shine:hover::before {
-  animation: btn-shine-sweep 1.5s ease-out infinite;
-}
-
-.btn--shine::before {
-  content: "";
-  position: absolute;
-  width: 100px;
-  height: 100%;
-  top: 0;
-  left: -100px;
-  opacity: 0.6;
-  pointer-events: none;
-  background-image: linear-gradient(
-    120deg,
-    rgba(255, 255, 255, 0) 30%,
-    rgba(255, 255, 255, 0.8),
-    rgba(255, 255, 255, 0) 70%
-  );
-}
-
-.btn--shine:active {
-  transform: scale(0.98);
-}
-
-@keyframes btn-shine-sweep {
-  0% {
-    left: -100px;
-  }
-  60% {
-    left: 100%;
-  }
-  to {
-    left: 100%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .btn--shine,
-  .btn--shine .btn--shine__icon {
-    transition: none;
-  }
-  .btn--shine:hover {
-    transform: none;
-  }
-  .btn--shine:hover .btn--shine__icon {
-    transform: none;
-  }
-  .btn--shine:hover::before {
-    animation: none;
-  }
+  margin-top: 0.25rem;
 }
 
 .btn--ghost {
