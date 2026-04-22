@@ -1076,3 +1076,128 @@ select:focus {
     justify-content: space-between;
   }
 }
+
+/* Thème clair (toggle theme.js) */
+html[data-theme="light"] {
+  --bg: #f4f6fc;
+  --bg-elevated: #fff;
+  --panel: #fff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+}
+
+/* Lignes log — accent sévérité (gauche) */
+.tr-sev--crit {
+  box-shadow: inset 4px 0 0 var(--crit);
+}
+.tr-sev--high {
+  box-shadow: inset 4px 0 0 var(--high);
+}
+.tr-sev--med {
+  box-shadow: inset 4px 0 0 var(--med);
+}
+.tr-sev--low {
+  box-shadow: inset 4px 0 0 #64748b;
+}
+
+.service-pill {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+.service-pill--ok {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.service-pill--bad {
+  border-color: var(--crit);
+  color: var(--crit);
+}
+.service-pill--unk {
+  color: var(--muted);
+}
+
+.ok-pill {
+  color: var(--ok);
+  font-size: 0.75rem;
+}
+
+.drawer--wide {
+  max-width: min(96vw, 720px);
+  width: min(96vw, 720px);
+}
+
+.json-pre {
+  max-height: 60vh;
+  overflow: auto;
+  font-size: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+}
+
+.table-wrap--wide {
+  overflow-x: auto;
+}
+
+.badge-row {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  font-weight: 600;
+}
+.badge--active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+.badge--silent {
+  background: rgba(250, 204, 21, 0.2);
+  color: #ca8a04;
+}
+.badge--down {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+}
+.dialog-backdrop.is-open {
+  display: flex;
+}
+.dialog {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  max-width: 420px;
+  width: 90%;
+}
+.dialog label {
+  display: block;
+  margin: 0.5rem 0 0.15rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.dialog textarea {
+  width: 100%;
+  min-height: 5rem;
+  font-family: inherit;
+}
+.section-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+}

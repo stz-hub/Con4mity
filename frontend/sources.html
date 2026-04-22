@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Con4mity — Sources</title>
+    <link rel="stylesheet" href="style.css?v=12" />
+  </head>
+  <body class="page" data-page-title-key="pageTitle.sources" data-nav-active="sources">
+    <div class="shell">
+      <header class="topbar">
+        <div class="topbar__left">
+          <img
+            class="topbar__logo"
+            src="assets/logo.png?v=5"
+            alt="Con4mity"
+            width="120"
+            height="44"
+            decoding="async"
+          />
+          <div class="topbar__titles">
+            <p class="brand-name">CON4MITY</p>
+            <p class="brand-sub">Open Source SIEM</p>
+          </div>
+        </div>
+        <div class="topbar__right">
+          <nav class="topbar__nav" aria-label="Main">
+            <div id="main-nav-links" class="nav-links"></div>
+          </nav>
+          <button type="button" class="btn btn--ghost" id="logout" data-i18n="nav.logout">Déconnexion</button>
+        </div>
+      </header>
+
+      <section class="page-intro">
+        <h1 data-i18n="sources.heading">Sources</h1>
+        <p class="muted" data-i18n="sources.subtitle">Machines et dernière activité</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head">
+          <h2 data-i18n="sources.heading">Liste</h2>
+          <button type="button" class="btn btn--sm btn--primary" id="btn-refresh" data-i18n="overview.refresh">
+            Rafraîchir
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th data-i18n="sources.colHost">Hôte</th>
+                <th data-i18n="sources.colLast">Dernier log</th>
+                <th data-i18n="sources.colBadge">État</th>
+              </tr>
+            </thead>
+            <tbody id="src-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    <div id="app-footer"></div>
+    <script src="app.js?v=8"></script>
+    <script src="i18n.js?v=7"></script>
+    <script src="theme.js?v=1"></script>
+    <script src="nav.js?v=6"></script>
+    <script src="footer.js?v=5"></script>
+    <script>
+      if (!getToken()) window.location.href = "index.html";
+      document.getElementById("logout").onclick = () => {
+        localStorage.removeItem("con4mity_token");
+        window.location.href = "index.html";
+      };
+
+      function badgeClass(b) {
+        if (b === "active") return "badge-row badge--active";
+        if (b === "silent") return "badge-row badge--silent";
+        return "badge-row badge--down";
+      }
+      function badgeLabel(b) {
+        if (b === "active") return t("sources.badgeActive");
+        if (b === "silent") return t("sources.badgeSilent");
+        return t("sources.badgeDown");
+      }
+
+      async function load() {
+        const data = await apiGet("/sources");
+        const tb = document.getElementById("src-body");
+        tb.innerHTML = "";
+        const items = data.items || [];
+        if (!items.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = '<td colspan="3" class="table-empty">—</td>';
+          tb.appendChild(tr);
+          return;
+        }
+        for (const r of items) {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" +
+            (r.host || "—") +
+            "</td><td class=\"mono\">" +
+            (r.last_seen || "—") +
+            '</td><td><span class="' +
+            badgeClass(r.badge) +
+            '">' +
+            badgeLabel(r.badge) +
+            "</span></td>";
+          tb.appendChild(tr);
+        }
+      }
+
+      document.getElementById("btn-refresh").onclick = () => load().catch((e) => alert(e.message));
+      load().catch((e) => alert(e.message));
+      window.addEventListener("con4mity-lang", () => load().catch(() => {}));
+    </script>
+  </body>
+</html>

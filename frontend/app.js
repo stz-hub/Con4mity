@@ -113,3 +113,52 @@ async function apiPatch(path, body) {
   if (!r.ok) throw new Error((await r.text()) || r.statusText);
   return r.json();
 }
+
+/**
+ * WebSocket /api/stream — stats + volume 24h (mise à jour toutes ~3s).
+ * Retourne une fonction close().
+ */
+function discoverStreamUrl() {
+  const token = getToken();
+  if (!token) return null;
+  const origin = effectiveApiOrigin();
+  const { pathname } = window.location;
+  const proxy = pathname.match(/^(\/proxy\/\d+)/);
+  const basePath = proxy ? proxy[1] : "";
+  const u = new URL(origin);
+  u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+  u.pathname = `${basePath}/api/stream`.replace(/\/\//, "/");
+  u.searchParams.set("token", token);
+  return u.toString();
+}
+
+function connectCon4mityStream(onMessage) {
+  const u = discoverStreamUrl();
+  if (!u) return function noop() {};
+  let ws;
+  try {
+    ws = new WebSocket(u);
+  } catch {
+    return function noop() {};
+  }
+  ws.onmessage = function (ev) {
+    try {
+      onMessage(JSON.parse(ev.data));
+    } catch (_) {
+      /* ignore */
+    }
+  };
+  return function close() {
+    try {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+    } catch (_) {
+      /* ignore */
+    }
+  };
+}
+
+/** URL d’export CSV (GET /api/logs/export.csv) — mêmes paramètres logiques que /logs. */
+function buildLogsExportUrl(params) {
+  const q = apiQueryString(params);
+  return `${API_BASE}/logs/export.csv${q ? q : ""}`;
+}

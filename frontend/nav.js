@@ -1,12 +1,13 @@
 /**
  * Con4mity — liens de navigation (remplit #main-nav-links).
- * data-nav-active sur <body> : overview | logs | alerts | reports | automation | settings
+ * data-nav-active sur <body> : logs | alerts | sources | reports | automation | settings
  */
 (function () {
   const PAGES = [
-    { id: "overview", href: "overview.html", i18n: "nav.overview" },
-    { id: "logs", href: "logs.html", i18n: "nav.logs" },
+    { id: "overview", href: "logs.html#section-overview", i18n: "nav.overview" },
+    { id: "logs", href: "logs.html#section-logs", i18n: "nav.logs" },
     { id: "alerts", href: "alerts.html", i18n: "nav.alerts" },
+    { id: "sources", href: "sources.html", i18n: "nav.sources" },
     { id: "reports", href: "reports.html", i18n: "nav.reports" },
     { id: "automation", href: "automation.html", i18n: "nav.automation" },
     { id: "settings", href: "settings.html", i18n: "nav.settings" },
