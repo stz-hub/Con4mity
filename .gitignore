@@ -8,3 +8,4 @@ node_modules/
 venv/
 *.egg-info/
 backend/.venv/
+*.bak

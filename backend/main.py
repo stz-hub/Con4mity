@@ -2268,6 +2268,56 @@ async def ws_event_stream(websocket: WebSocket) -> None:
         return
 
 
+
+# === Webhook ElastAlert → alertes dans PostgreSQL ===
+WEBHOOK_TOKEN = os.getenv("WEBHOOK_TOKEN", "9JZU8IZv9nmj41mtYYnSZI0BlSYLUhRseC0tHfIuab4")
+
+class AlertWebhook(BaseModel):
+    rule_name: str
+    severity: str = "medium"
+    host: str | None = None
+    description: str | None = None
+    num_matches: int | None = None
+    log_ids: list[str] | None = None
+
+
+@api.post("/webhook/alert")
+async def webhook_alert(body: AlertWebhook, request: Request):
+    """Réception d'alertes ElastAlert — auth par token dans header X-Webhook-Token."""
+    token = request.headers.get("X-Webhook-Token", "")
+    if token != WEBHOOK_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid webhook token")
+
+    sev = (body.severity or "medium").lower()
+    if sev not in ("critical", "high", "medium", "low", "info"):
+        sev = "medium"
+
+    description = body.description or f"{body.num_matches or 0} matches détectés"
+    log_ids_json = json.dumps(body.log_ids or [])
+
+    conn = pg_connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO alerts (rule_name, severity, host, description, status, created_at, log_ids)
+                VALUES (%s, %s, %s, %s, 'new', NOW(), %s)
+                RETURNING id
+                """,
+                (body.rule_name, sev, body.host or "unknown", description, log_ids_json),
+            )
+            new_id = cur.fetchone()[0]
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"DB error: {e}") from e
+    finally:
+        conn.close()
+
+    return {"id": new_id, "status": "inserted"}
+
+
+
 app.include_router(api)
 
 # Front : servi en dernier pour ne pas masquer /docs, /openapi.json, /api/*
