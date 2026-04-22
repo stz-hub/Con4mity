@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Con4mity — Alertes</title>
-    <link rel="stylesheet" href="style.css?v=5" />
+    <link rel="stylesheet" href="style.css?v=12" />
   </head>
   <body class="page" data-page-title-key="pageTitle.alerts" data-nav-active="alerts">
     <div class="shell">
@@ -34,6 +34,19 @@
       <section class="page-intro">
         <h1 data-i18n="alerts.heading">Centre d'alertes</h1>
         <p class="muted" data-i18n="alerts.subtitle">Traiter et suivre les détections</p>
+        <p style="margin-top: 0.75rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center">
+          <button type="button" class="btn btn--sm btn--ghost" id="btn-notif" data-i18n="alerts.requestNotif">
+            Notifications
+          </button>
+          <span class="muted" id="notif-st" style="font-size: 0.8rem"></span>
+        </p>
+      </section>
+
+      <section class="panel" style="margin-bottom: 1rem">
+        <div class="panel__head">
+          <h2 data-i18n="alerts.chart30d">Alertes / jour (30 j.)</h2>
+        </div>
+        <canvas id="chart-alerts" height="200"></canvas>
       </section>
 
       <div class="seg" role="tablist" style="margin-bottom: 1rem">
@@ -99,17 +112,51 @@
 
     <div id="app-footer"></div>
     <div class="drawer-backdrop" id="drawer-back"></div>
-    <aside class="drawer" id="drawer" aria-hidden="true">
+    <aside class="drawer drawer--wide" id="drawer" aria-hidden="true">
       <h3 id="drawer-title" data-i18n="alerts.detailTitle">Détail</h3>
       <p class="muted" id="drawer-meta"></p>
+      <p id="drawer-ack" class="muted" style="font-size: 0.9rem"></p>
       <pre id="drawer-desc" style="white-space: pre-wrap; font-size: 0.85rem; color: var(--text)"></pre>
-      <button type="button" class="btn btn--primary" id="drawer-logs" data-i18n="alerts.investigate">Logs</button>
-      <button type="button" class="btn btn--ghost" id="drawer-close">OK</button>
+      <h4 class="mt" data-i18n="alerts.linkedLogs" style="margin: 0.75rem 0 0.35rem; font-size: 0.95rem">
+        Journaux liés
+      </h4>
+      <div class="table-wrap" style="max-height: 220px; overflow: auto">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>time</th>
+              <th>host</th>
+              <th>sev</th>
+              <th>message</th>
+            </tr>
+          </thead>
+          <tbody id="drawer-logs-tb"></tbody>
+        </table>
+      </div>
+      <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap">
+        <button type="button" class="btn btn--primary" id="drawer-logs" data-i18n="alerts.investigate">Logs</button>
+        <button type="button" class="btn btn--ghost" id="drawer-close">OK</button>
+      </div>
     </aside>
 
-    <script src="app.js?v=7"></script>
-    <script src="i18n.js?v=5"></script>
-    <script src="nav.js?v=5"></script>
+    <div class="dialog-backdrop" id="ack-dlg">
+      <div class="dialog">
+        <h3 data-i18n="alerts.ackComment">Commentaire</h3>
+        <p class="muted" style="font-size: 0.85rem" data-i18n="alerts.ackOptional">Optionnel</p>
+        <label for="ack-ta" data-i18n="alerts.ackComment">Texte</label>
+        <textarea id="ack-ta" rows="4"></textarea>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; justify-content: flex-end">
+          <button type="button" class="btn btn--ghost" id="ack-cancel">Annuler</button>
+          <button type="button" class="btn btn--primary" id="ack-ok">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="app.js?v=8"></script>
+    <script src="i18n.js?v=7"></script>
+    <script src="theme.js?v=1"></script>
+    <script src="nav.js?v=6"></script>
     <script src="footer.js?v=5"></script>
     <script>
       if (!getToken()) window.location.href = "index.html";
@@ -122,6 +169,9 @@
       let viewMode = "grouped";
       let cache = [];
       let drawerContext = null;
+      let pending = null;
+      let chartA = null;
+      let lastCrit = null;
 
       function groupKey(a) {
         return `${a.rule_name || ""}|${a.host || ""}|${(a.severity || "").toLowerCase()}`;
@@ -179,12 +229,55 @@
       }
 
       function openDrawer(payload) {
+        document.getElementById("drawer-ack").textContent = "";
+        const tb0 = document.getElementById("drawer-logs-tb");
+        if (tb0) tb0.innerHTML = "";
         drawerContext = payload;
         document.getElementById("drawer-title").textContent = payload.title || t("alerts.detailTitle");
         document.getElementById("drawer-meta").textContent = payload.meta || "";
         document.getElementById("drawer-desc").textContent = payload.desc || "—";
         document.getElementById("drawer-back").classList.add("is-open");
         document.getElementById("drawer").classList.add("is-open");
+      }
+
+      async function openAlertDetail(alert) {
+        try {
+          const data = await apiGet("/alerts/" + alert.id);
+          const a = data.alert;
+          if (!a) return;
+          const logsL = data.linked_logs || [];
+          const ack = a.status_note || a.last_actor
+            ? (a.last_actor || "—") + (a.status_note ? " : " + a.status_note : "")
+            : "";
+          document.getElementById("drawer-ack").textContent = ack;
+          document.getElementById("drawer-title").textContent = a.rule_name || "—";
+          document.getElementById("drawer-meta").textContent = [a.severity, a.host, a.created_at]
+            .filter(Boolean)
+            .join(" · ");
+          document.getElementById("drawer-desc").textContent = a.description || JSON.stringify(a, null, 2);
+          const tb = document.getElementById("drawer-logs-tb");
+          tb.innerHTML = "";
+          for (const L of logsL) {
+            const tr = document.createElement("tr");
+            const ts = (L.con4mity_ui_timestamp || L["@timestamp"] || "—").toString();
+            tr.innerHTML =
+              "<td class=\"mono\">" +
+              ts.slice(0, 24) +
+              "</td><td>" +
+              (L.con4mity_ui_host || "—") +
+              "</td><td>" +
+              (L.con4mity_ui_severity || "—") +
+              '</td><td class="msg">' +
+              (L.con4mity_ui_message || "—").toString().slice(0, 200) +
+              "</td>";
+            tb.appendChild(tr);
+          }
+          drawerContext = { host: a.host, rule: a.rule_name };
+          document.getElementById("drawer-back").classList.add("is-open");
+          document.getElementById("drawer").classList.add("is-open");
+        } catch (e) {
+          alert(e.message);
+        }
       }
 
       function closeDrawer() {
@@ -201,7 +294,7 @@
           "con4mity_logs_prefill",
           JSON.stringify({ host: drawerContext.host || "", q: drawerContext.rule || "" }),
         );
-        window.location.href = "logs.html";
+        window.location.href = "logs.html#section-logs";
       };
 
       function renderGrouped(list) {
@@ -228,16 +321,9 @@
               <button type="button" class="btn btn--sm" data-act="in_progress">${t("alerts.actionProgress")}</button>
               <button type="button" class="btn btn--sm btn--primary" data-act="resolved">${t("alerts.actionResolved")}</button>
             </td>`;
-          tr.querySelector("[data-act=detail]").onclick = () =>
-            openDrawer({
-              title: a.rule_name || "—",
-              meta: `${a.host || ""} · ${a.severity || ""}`,
-              desc: (g.items.map((x) => `#${x.id} ${x.created_at} [${x.status}] ${x.description || ""}`).join("\n")),
-              host: a.host,
-              rule: a.rule_name,
-            });
-          tr.querySelector("[data-act=in_progress]").onclick = () => patch(g.items[0].id, "in_progress");
-          tr.querySelector("[data-act=resolved]").onclick = () => patch(g.items[0].id, "resolved");
+          tr.querySelector("[data-act=detail]").onclick = () => openAlertDetail(a);
+          tr.querySelector("[data-act=in_progress]").onclick = () => openPatch(g.items[0].id, "in_progress");
+          tr.querySelector("[data-act=resolved]").onclick = () => openPatch(g.items[0].id, "resolved");
           tb.appendChild(tr);
         }
       }
@@ -271,17 +357,10 @@
               <button type="button" class="btn btn--sm" data-act="in_progress">${t("alerts.actionProgress")}</button>
               <button type="button" class="btn btn--sm btn--primary" data-act="resolved">${t("alerts.actionResolved")}</button>
             </td>`;
-          tr.querySelector("button.btn--ghost").onclick = () =>
-            openDrawer({
-              title: a.rule_name || "—",
-              meta: `${a.created_at || ""} · ${a.host || ""}`,
-              desc: a.description || JSON.stringify(a, null, 2).slice(0, 1200),
-              host: a.host,
-              rule: a.rule_name,
-            });
+          tr.querySelector("button.btn--ghost").onclick = () => openAlertDetail(a);
           tr.querySelectorAll("button[data-act]").forEach((btn) => {
             if (btn.dataset.act === "detail") return;
-            btn.addEventListener("click", () => patch(a.id, btn.dataset.act));
+            btn.addEventListener("click", () => openPatch(a.id, btn.dataset.act));
           });
           tb.appendChild(tr);
         }
@@ -304,14 +383,74 @@
         render();
       }
 
-      async function patch(id, status) {
+      function openPatch(id, status) {
+        pending = { id, status };
+        const ta = document.getElementById("ack-ta");
+        if (ta) ta.value = "";
+        document.getElementById("ack-dlg").classList.add("is-open");
+      }
+
+      document.getElementById("ack-cancel").onclick = function () {
+        pending = null;
+        document.getElementById("ack-dlg").classList.remove("is-open");
+      };
+      document.getElementById("ack-ok").onclick = async function () {
+        if (!pending) return;
+        const c = document.getElementById("ack-ta").value.trim();
         try {
-          await apiPatch(`/alerts/${id}`, { status });
+          const body = { status: pending.status };
+          if (c) body.comment = c;
+          await apiPatch("/alerts/" + pending.id, body);
+          document.getElementById("ack-dlg").classList.remove("is-open");
+          pending = null;
           await load();
           closeDrawer();
         } catch (e) {
           alert(e.message);
         }
+      };
+
+      document.getElementById("ack-dlg").addEventListener("click", function (e) {
+        if (e.target === this) {
+          pending = null;
+          this.classList.remove("is-open");
+        }
+      });
+
+      document.getElementById("btn-notif").onclick = function () {
+        if (!("Notification" in window)) {
+          document.getElementById("notif-st").textContent = "N/A";
+          return;
+        }
+        Notification.requestPermission().then(function (p) {
+          document.getElementById("notif-st").textContent = p;
+        });
+      };
+
+      async function loadDaily() {
+        const rows = await apiGet("/alerts/daily", { days: 30 });
+        if (typeof Chart === "undefined") return;
+        const ctx = document.getElementById("chart-alerts");
+        const labels = rows.map((r) => (r.date || "").slice(5));
+        const counts = rows.map((r) => r.count);
+        if (chartA) chartA.destroy();
+        chartA = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "alerts",
+                data: counts,
+                borderColor: "#2b8cff",
+                backgroundColor: "rgba(43,140,255,0.1)",
+                fill: true,
+                tension: 0.2,
+              },
+            ],
+          },
+          options: { plugins: { legend: { display: false } } },
+        });
       }
 
       document.getElementById("f-sev").onchange = () => render();
@@ -332,7 +471,30 @@
 
       window.addEventListener("con4mity-lang", () => render());
 
-      load().catch((e) => alert(e.message));
+      (async function () {
+        try {
+          await load();
+          const s0 = await apiGet("/stats");
+          lastCrit = s0.critical_open;
+        } catch (e) {
+          alert(e.message);
+        }
+        loadDaily().catch(function () {});
+
+        setInterval(async function () {
+          try {
+            const s = await apiGet("/stats");
+            if (lastCrit != null && s.critical_open > lastCrit) {
+              if ("Notification" in window && Notification.permission === "granted") {
+                new Notification("Con4mity", { body: t("alerts.newCritical") + " (" + s.critical_open + ")" });
+              }
+            }
+            lastCrit = s.critical_open;
+          } catch (_) {
+            /* ignore */
+          }
+        }, 15_000);
+      })();
     </script>
   </body>
 </html>

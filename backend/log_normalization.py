@@ -189,12 +189,59 @@ def pick_message(doc: dict[str, Any], table_max: int = 480) -> str:
     return t if len(t) <= table_max else t[: table_max - 1] + "…"
 
 
+def pick_log_source_category(doc: dict[str, Any]) -> str:
+    """
+    Catégorie d’origine — windows / linux / switch / network / other.
+    Utilisé pour le filtrage côté API (con4mity_ui_source) et la colonne « Source ».
+    """
+    hot = (doc.get("host") or {}) if isinstance(doc.get("host"), dict) else {}
+    os_type = (hot.get("os") or {}) if isinstance(hot.get("os"), dict) else {}
+    hos = (os_type.get("type") or os_type.get("name") or "").lower()
+    if hos in ("windows", "win32nt"):
+        return "windows"
+    if hos in ("linux", "macos", "darwin"):
+        return "linux"
+    ag = (doc.get("agent") or {}) if isinstance(doc.get("agent"), dict) else {}
+    an = str(ag.get("name") or ag.get("type") or "").lower()
+    if "winlog" in an:
+        return "windows"
+    if "filebeat" in an and "winlog" not in an:
+        return "linux"
+    if "osquery" in an or "auditbeat" in an or "metricbeat" in an:
+        return "linux"
+    ds = doc.get("data_stream")
+    ds_s = str(ds if not isinstance(ds, dict) else (ds or {}).get("dataset", "")).lower()
+    if "windows" in ds_s or "winlog" in ds_s or "sysmon" in ds_s:
+        return "windows"
+    if any(x in ds_s for x in ("cisco", "fortinet", "palo", "juniper", "asa")):
+        return "switch" if "switch" in ds_s or "cisco" in ds_s or "juniper" in ds_s else "network"
+    et = (doc.get("event") or {}) if isinstance(doc.get("event"), dict) else {}
+    if str(et.get("module") or "").lower() in ("cisco", "juniper"):
+        return "switch"
+    obs = (doc.get("observer") or {}) if isinstance(doc.get("observer"), dict) else {}
+    odev = str(obs.get("type") or obs.get("product") or "").lower()
+    if odev in ("firewall", "ids", "ips", "firewall"):
+        return "network"
+    for blob in (doc.get("message"), doc.get("raw_message"), doc.get("log")):
+        if not isinstance(blob, str):
+            continue
+        u = blob[:4000].upper()
+        if u.startswith("%LINK-") or u.startswith("%LINEPROTO-") or "GIGABITETH" in u or "ETH-" in u[:40]:
+            return "switch"
+        if "JUNIPER" in u or u.startswith("CISCO-") and "APPLIANCE" not in u[:80]:
+            return "switch"
+        if "FORTIGATE" in u or "PALO ALTO" in u or (u.startswith("TRAFFIC") and "PORT" in u):
+            return "network"
+    return "other"
+
+
 def ui_envelope(doc: dict[str, Any]) -> dict[str, Any]:
     """Copie du document + champs dérivés pour le front (sans écraser l’existant)."""
     out = dict(doc)
     out["con4mity_ui_host"] = pick_host(doc)
     out["con4mity_ui_severity"] = pick_severity(doc)
     out["con4mity_ui_message"] = pick_message(doc)
+    out["con4mity_ui_source"] = pick_log_source_category(doc)
     ts = pick_timestamp_raw(doc)
     if ts:
         out["con4mity_ui_timestamp"] = ts

@@ -34,6 +34,17 @@
     return "info";
   }
 
+  function pickSource(row) {
+    if (row.con4mity_ui_source) {
+      const s = String(row.con4mity_ui_source);
+      if (s === "linux") return "Linux / Unix";
+      if (s === "windows") return "Windows";
+      if (s === "switch") return "Switch";
+      if (s === "network") return "Réseau / FW";
+    }
+    return String(row.con4mity_ui_source || "—");
+  }
+
   function pickMessage(row) {
     if (row.con4mity_ui_message) return row.con4mity_ui_message;
     if (row.message && String(row.message).trim()) return String(row.message).trim();
@@ -66,6 +77,7 @@
   global.Con4mityLogFields = {
     pickTime,
     pickHost,
+    pickSource,
     pickSeverity,
     pickMessage,
     severityPillClass,
