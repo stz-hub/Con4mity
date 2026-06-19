@@ -1,0 +1,10 @@
+description: Tentative de Kerberoasting via demande de ticket de service
+filter:
+- query:
+    query_string:
+      query: (EventID:4769 AND TicketEncryptionType:0x17) AND (NOT ServiceName:*$)
+index: '*'
+name: Kerberoasting Detection
+priority: 3
+type: any
+

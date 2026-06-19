@@ -1,0 +1,10 @@
+description: "D\xE9tection de connexion suspecte avec un compte local d\xE9sactiv\xE9"
+filter:
+- query:
+    query_string:
+      query: EventID:4625 AND SubStatus:0xC0000072
+index: '*'
+name: Connection with disabled account
+priority: 4
+type: any
+

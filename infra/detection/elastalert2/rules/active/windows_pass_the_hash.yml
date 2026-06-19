@@ -1,0 +1,12 @@
+description: "D\xE9tection d'une tentative de Pass-the-Hash via authentification NTLM
+  suspecte"
+filter:
+- query:
+    query_string:
+      query: (EventID:4624 AND LogonType:3 AND AuthenticationPackageName:NTLM) AND
+        (NOT TargetUserName:*$)
+index: '*'
+name: Pass The Hash
+priority: 4
+type: any
+

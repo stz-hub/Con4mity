@@ -1,0 +1,13 @@
+description: "D\xE9tection de toute utilisation suspecte de Powershell (ex\xE9cution
+  de script, encodage, etc.)"
+filter:
+- query:
+    query_string:
+      query: EventID:4104 AND (ScriptBlockText:(*\-EncodedCommand* OR *\-WindowStyle\
+        Hidden* OR *IEX* OR *Invoke\-Expression* OR *DownloadString* OR *bypass* OR
+        *FromBase64String* OR *.ps1* OR *Start\-Process* OR *Invoke\-Command*))
+index: '*'
+name: Suspicious Powershell usage
+priority: 4
+type: any
+

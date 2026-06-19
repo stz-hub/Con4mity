@@ -1,0 +1,21 @@
+title: GPO Modified
+id: 6e7f8091-0234-5678-f012-345678901234
+description: Détection de modification d'une stratégie de groupe (GPO)
+status: experimental
+tags:
+    - attack.defense_evasion
+    - attack.t1484.001
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID:
+            - 5136 # Modification d'un objet AD
+            - 5137 # Création d'un objet AD
+            - 5141 # Suppression d'un objet AD
+        ObjectClass: 'groupPolicyContainer'
+    condition: selection
+falsepositives:
+    - Modification légitime d'une GPO par un administrateur
+level: high

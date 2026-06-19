@@ -1,0 +1,12 @@
+description: "D\xE9tection de tentatives d'escalade de privil\xE8ges"
+filter:
+- query:
+    query_string:
+      query: (message:(*su\:\ \(to\ root\)* OR *session\ opened\ for\ user\ root*
+        OR *su\ root*)) OR (message:(*pkexec* OR *NOPASSWD* OR *sudoedit*)) OR (message:(*TTY\=unknown*
+        OR *PWD\=\/* OR *sudo\:\ sorry,\ you\ must\ have\ a\ tty*))
+index: '*'
+name: Privilege Escalation detection
+priority: 3
+type: any
+

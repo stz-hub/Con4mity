@@ -1,0 +1,28 @@
+title: Suspicious Powershell usage
+id : fd0dc04b-8188-4cc4-a4f9-61d0cf203cc0
+description: Détection de toute utilisation suspecte de Powershell (exécution de script, encodage, etc.)
+status: experimental
+tags:
+  - attack.execution
+  - attack.t1059.001
+logsource:
+  product: windows
+  service: powershell
+detection:
+  selection:
+    EventID: 4104
+    ScriptBlockText|contains:
+      - '-EncodedCommand'
+      - '-WindowStyle Hidden'
+      - 'IEX'
+      - 'Invoke-Expression'
+      - 'DownloadString'
+      - 'bypass'
+      - 'FromBase64String'
+      - '.ps1'
+      - 'Start-Process'
+      - 'Invoke-Command'
+  condition: selection
+falsepositives:
+  - Unknown
+level: critical

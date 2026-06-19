@@ -1,0 +1,12 @@
+description: "D\xE9tection de connexions (r\xE9seau ou rdp) r\xE9ussies apr\xE8s plusieurs
+  \xE9checs de connexion"
+filter:
+- query:
+    query_string:
+      query: (EventID:4625 AND (LogonType:(3 OR 10))) AND (EventID:4624 AND (LogonType:(3
+        OR 10)))
+index: '*'
+name: Login after failures
+priority: 3
+type: any
+

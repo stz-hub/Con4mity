@@ -1,0 +1,18 @@
+title: SSH Root Login Detection
+id : c83621a3-1804-405a-aa35-99a2ec635f44
+description: Détection de tentatives de connexions SSH Root (échouées et réussies)
+status: experimental
+tags:
+  - attack.initial_access
+  - attack.t1078
+logsource:
+  product: linux
+  service: ssh
+detection:
+  selection:
+      message|contains:
+          - "Failed password for root"
+          - "Accepted password for root"
+          - "Accepted publickey for root"
+  condition: selection
+level: critical

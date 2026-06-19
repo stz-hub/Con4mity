@@ -1,0 +1,22 @@
+title: New Admin Account Created in AD
+id: 7d4e8f3a-1234-5678-abcd-ef9012345678
+description: Détection de la création d'un nouveau compte administrateur dans l'Active Directory
+status: experimental
+tags:
+    - attack.persistence
+    - attack.t1136.001
+logsource:
+  product: windows
+  service: security
+detection:
+  selection_user:
+      EventID: 4720 # Création d'un user
+  selection_admin:
+      EventID: 4732 # Ajout d'un user à un groupe admin
+      GroupName|contains:
+          - 'Administrators'
+          - 'Domain Admins'
+  condition: selection_user and selection_admin
+falsepositives:
+    - Création légitime d'un compte admin par un administrateur autorisé
+level: critical

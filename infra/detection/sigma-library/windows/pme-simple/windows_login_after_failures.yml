@@ -1,0 +1,25 @@
+title: Login after failures
+id : 35606d9b-6f11-48a4-9f53-94caddf4cfbf
+description: Détection de connexions (réseau ou rdp) réussies après plusieurs échecs de connexion
+status: experimental
+tags:
+    - attack.credential_access
+    - attack.t1110.001
+logsource:
+  product: windows
+  service: security
+detection:
+    selection_failed:
+        EventID: 4625 # Connexion échouée
+        LogonType:
+            - 3
+            - 10
+    selection_success:
+        EventID: 4624 # Connexion réussie
+        LogonType:
+            - 3
+            - 10
+    condition: selection_failed and selection_success
+falsepositives:
+  - Unknown
+level: high

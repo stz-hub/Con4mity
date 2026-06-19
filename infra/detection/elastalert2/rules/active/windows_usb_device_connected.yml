@@ -1,0 +1,10 @@
+description: "Detection de l'insertion d'un p\xE9riph\xE9rique USB"
+filter:
+- query:
+    query_string:
+      query: EventID:6416 AND (ClassName:(*DiskDrive* OR *USB\ Mass\ Storage*))
+index: '*'
+name: USB Device Connected
+priority: 3
+type: any
+

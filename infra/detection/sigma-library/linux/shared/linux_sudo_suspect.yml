@@ -1,0 +1,22 @@
+title: Suspicious Sudo usage
+id : ad66ed87-1868-4acc-803e-ae8f086fdbc8
+description: Détection de toute utilisation sudo suspecte
+status: experimental
+tags:
+  - attack.privilege_escalation
+  - attack.t1548.003
+logsource:
+  product: linux
+  service: sudo
+detection:
+  selection:
+      message|contains:
+          - "sudo: authentication failure"
+          - "sudo: unable to resolve host"
+          - "user NOT in sudoers"
+          - "COMMAND=/bin/bash"
+          - "COMMAND=/bin/sh"
+  condition: selection
+falsepositives:
+  - Erreur de saisie du mot de passe par l'administrateur
+level: high

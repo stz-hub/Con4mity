@@ -1,0 +1,57 @@
+#!/bin/bash
+# Deploiement complet des regles ElastAlert2
+
+set -e
+
+# Chemins absolus
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../../" && pwd)"
+ACTIVE_DIR="$SCRIPT_DIR/../elastalert2/rules/active"
+
+# Charger le .env
+if [ -f "$ROOT_DIR/.env" ]; then
+	source "$ROOT_DIR/.env"
+else
+	echo "Fichier .env manquant dans $ROOT_DIR"
+	exit 1
+fi
+
+echo "=== Deploiement Con4mity SIEM ==="
+echo "Profil    : $PROFILE"
+echo "OpenSearch: $OPENSEARCH_HOST:$OPENSEARCH_PORT"
+echo "Dashboard : $DASHBOARD_IP:$DASHBOARD_PORT"
+echo "=================================="
+
+# 1 Verifier OpenSearch
+curl -sf "http://${OPENSEARCH_HOST}:${OPENSEARCH_PORT}" > /dev/null \
+	|| { echo "OpenSearch inaccessible"; exit 1; }
+echo "1. OpenSearch OK"
+
+# 2 Convertir les regles Sigma
+echo "2. Conversion des regles Sigma..."
+bash "$SCRIPT_DIR/convert_rules.sh"
+
+# 3 Corriger les severites
+echo "3. Correction des severites..."
+bash "$SCRIPT_DIR/fix_severity.sh"
+
+# 4 Remplacer les variables dans les regles
+echo "4. Injection des variables..."
+for f in "$ACTIVE_DIR"/*.yml; do
+	sed -i \
+	       -e "s|http://[0-9.]*:[0-9]*/api/webhook/alert|http://${DASHBOARD_IP}:${DASHBOARD_PORT}/api/webhook/alert|g" \
+	       -e "s|X-Webhook-Token: .*|X-Webhook-Token: ${WEBHOOK_TOKEN}|g" \
+	       "$f"
+done
+echo "   Variables injectees dans $(ls $ACTIVE_DIR/*.yml | wc -l) regles"
+
+# 5 Appliquer le pipeline grok
+echo "5. Application pipeline grok..."
+curl -s -X PUT \
+	"http://${OPENSEARCH_HOST}:${OPENSEARCH_PORT}/_ingest/pipeline/con4mity-auth-parse" \
+	-H "Content-Type: application/json" \
+	-d @"$SCRIPT_DIR/../pipelines/pipeline-grok.json" > /dev/null
+echo "Pipeline grok applique"
+
+echo ""
+echo "=== Deploiement termine : $(ls $ACTIVE_DIR/*.yml | wc -l) regles actives ==="

@@ -1,0 +1,17 @@
+title: Windows Defender Disabled
+id : 13778ceb-d23c-4ba0-ad8c-a0a790a29c90
+description: "Détection de la désactivation manuelle de Windows Defender par un utilisateur ou processus (ex : installation d'un logiciel malveillant sans connaissance de l'utilisateur)"
+status: experimental
+tags:
+    - attack.defense_evasion
+    - attack.t1562.001
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 5001
+  condition: selection
+falsepositives:
+  - Unknown
+level: critical

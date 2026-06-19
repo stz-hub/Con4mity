@@ -1,0 +1,11 @@
+es_host: {{OPENSEARCH_HOST}}
+es_port: {{OPENSEARCH_PORT}}
+use_ssl: false
+rules_folder: /opt/elastalert/rules/active
+run_every:
+  minutes: 1
+buffer_time:
+  minutes: 15
+writeback_index: elastalert_status
+alert_time_limit:
+  days: 2

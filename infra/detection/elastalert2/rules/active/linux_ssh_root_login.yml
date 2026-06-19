@@ -1,0 +1,12 @@
+description: "D\xE9tection de tentatives de connexions SSH Root (\xE9chou\xE9es et
+  r\xE9ussies)"
+filter:
+- query:
+    query_string:
+      query: message:(*Failed\ password\ for\ root* OR *Accepted\ password\ for\ root*
+        OR *Accepted\ publickey\ for\ root*)
+index: '*'
+name: SSH Root Login Detection
+priority: 4
+type: any
+

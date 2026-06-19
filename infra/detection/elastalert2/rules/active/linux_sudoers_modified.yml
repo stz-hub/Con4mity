@@ -1,0 +1,11 @@
+description: "D\xE9tection de toute modification des sudoers sur le syst\xE8me"
+filter:
+- query:
+    query_string:
+      query: message:(*\/etc\/sudoers* OR *sudo\:\ \/etc\/sudoers.d\/user\:\ parsed\
+        OK* OR *usermod\:\ adding\ user\ to\ group\ sudo*)
+index: '*'
+name: Sudoers modification
+priority: 4
+type: any
+

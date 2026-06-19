@@ -1,0 +1,10 @@
+description: "D\xE9tection de tentatives de connexions SSH par bruteforce"
+filter:
+- query:
+    query_string:
+      query: message:(Failed\ password\ for OR Invalid\ user)
+index: '*'
+name: SSH Brute Force Detection
+priority: 3
+type: any
+

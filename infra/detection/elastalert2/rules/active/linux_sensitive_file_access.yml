@@ -1,0 +1,12 @@
+description: "D\xE9tection de tentatives d'acc\xE8s \xE0 des fichiers sensibles"
+filter:
+- query:
+    query_string:
+      query: message:(*\/etc\/shadow* OR *\/etc\/passwd* OR *\/etc\/sudoers* OR *\/etc\/ssh\/*
+        OR *\/etc\/ssl\/* OR *\/etc\/mysql\/* OR *\/etc\/apache2\/* OR *\/etc\/httpd\/*
+        OR *\/etc\/nginx\/* OR *.ssh\/authorized_keys*)
+index: '*'
+name: Sensitive File Access Detection
+priority: 4
+type: any
+

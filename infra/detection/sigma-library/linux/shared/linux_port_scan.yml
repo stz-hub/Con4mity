@@ -1,0 +1,26 @@
+title: Port scan detection
+id : d32ea04d-a91b-4e95-b8a4-3431d91906c7
+description: Scan de ports détecté sur le réseau
+status: experimental
+tags:
+  - attack.reconnaissance
+  - attack.t1046
+logsource:
+  product: linux
+  service: syslog
+detection:
+  selection_firewall:
+      message|contains:
+          - "DROPPED"
+          - "iptables"
+          - "Firewall.*Blocked"
+          - "TCP_IN Blocked"
+  selection_tools:
+      message|contains:
+          - "nmap"
+          - "masscan"
+          - "zmap"
+  condition: selection_firewall #| count() by src > 20 or selection_tools #soit plus de 20 connexions bloquées depuis la même ip source, soit l'utilisation d'un outil de scan (même unique)
+falsepositives:
+  - Scan légitime de ports (pour retrouver un appareil sur le réseau)
+level: medium

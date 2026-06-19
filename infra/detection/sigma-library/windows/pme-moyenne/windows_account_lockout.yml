@@ -1,0 +1,17 @@
+title: Account Lockout
+id: 7f809102-3456-7890-0123-456789012345
+description: Détection de verrouillage de compte utilisateur
+status: experimental
+tags:
+    - attack.credential_access
+    - attack.t1110
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID: 4740 # Compte utilisateur verrouillé
+    condition: selection
+falsepositives:
+    - Utilisateur ayant oublié son mot de passe
+level: medium

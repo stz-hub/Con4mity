@@ -1,0 +1,18 @@
+title: Connection with disabled account
+id : 45b31893-4383-41be-b5b6-807df4f9d4db
+description: Détection de connexion suspecte avec un compte local désactivé
+status: experimental
+tags:
+  - attack.defense_evasion
+  - attack.t1078
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4625
+    SubStatus: '0xC0000072' # Substatus pour les comptes désactivés puisque l'event 4625 est généré pour tous les échecs de connexion
+  condition: selection
+falsepositives:
+  - Unknown
+level: critical

@@ -1,0 +1,10 @@
+description: "D\xE9tection de la d\xE9sactivation du pare-feu Windows"
+filter:
+- query:
+    query_string:
+      query: EventID:(2002 OR 2083 OR 2003 OR 2082 OR 2008)
+index: '*'
+name: Firewall Disabled and/or Rules Deleted
+priority: 2
+type: any
+

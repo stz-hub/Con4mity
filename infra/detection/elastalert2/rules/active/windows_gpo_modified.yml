@@ -1,0 +1,10 @@
+description: "D\xE9tection de modification d'une strat\xE9gie de groupe (GPO)"
+filter:
+- query:
+    query_string:
+      query: (EventID:(5136 OR 5137 OR 5141)) AND ObjectClass:groupPolicyContainer
+index: '*'
+name: GPO Modified
+priority: 3
+type: any
+

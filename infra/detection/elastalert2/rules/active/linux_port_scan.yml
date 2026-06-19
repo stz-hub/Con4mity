@@ -1,0 +1,10 @@
+description: "Scan de ports d\xE9tect\xE9 sur le r\xE9seau"
+filter:
+- query:
+    query_string:
+      query: message:(*DROPPED* OR *iptables* OR *Firewall.*Blocked* OR *TCP_IN\ Blocked*)
+index: '*'
+name: Port scan detection
+priority: 2
+type: any
+

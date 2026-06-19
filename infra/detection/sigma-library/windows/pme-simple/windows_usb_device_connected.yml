@@ -1,0 +1,21 @@
+title: USB Device Connected
+id: 8f2603af-641f-419c-8222-6af17ceb7a7e
+description: Detection de l'insertion d'un périphérique USB
+status: experimental
+tags:
+    - attack.exfiltration
+    - attack.t1052.001
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    EventID: 6416
+  filter:
+    ClassName|contains:
+      - 'DiskDrive'
+      - 'USB Mass Storage'
+  condition: selection and filter
+falsepositives:
+  - Connexion d'une clé USB par un utilisateur légitime
+level: high

@@ -1,0 +1,19 @@
+title: Lateral Movement Detection
+id: 2a3b4c5d-6e7f-8901-bcde-f01234567890
+description: Détection de mouvement latéral via connexion réseau suspecte entre machines
+status: experimental
+tags:
+    - attack.lateral_movement
+    - attack.t1021.001
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID: 4624 # Connexion réussie
+        LogonType: 3  # Connexion réseau
+        TargetUserName|endswith: '$'
+    condition: selection
+falsepositives:
+    - Communication légitime entre serveurs
+level: high

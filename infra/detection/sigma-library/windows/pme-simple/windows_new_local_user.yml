@@ -1,0 +1,18 @@
+title: New local user added
+id : e7a3025c-3e57-48c5-bb48-556a1ddea8e1
+description: Détection de toute création de nouvel utilisateur local sur le système
+status: experimental
+tags:
+    - attack.persistence
+    - attack.t1136.001
+    - attack.t1136.002
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID: 4720
+    condition: selection
+falsepositives:
+    - Unknown
+level: medium

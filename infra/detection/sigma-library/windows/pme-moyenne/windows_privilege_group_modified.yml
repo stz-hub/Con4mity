@@ -1,0 +1,25 @@
+title: Privilege Group Modified
+id: 90123456-7890-1234-5678-901234567890
+description: Détection de modification d'un groupe à privilèges dans l'AD
+status: experimental
+tags:
+    - attack.privilege_escalation
+    - attack.t1098
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID:
+            - 4728 # Ajout d'un membre à un groupe global
+            - 4732 # Ajout d'un membre à un groupe local
+            - 4756 # Ajout d'un membre à un groupe universel
+        GroupName|contains:
+            - 'Domain Admins'
+            - 'Enterprise Admins'
+            - 'Schema Admins'
+            - 'Administrators'
+    condition: selection
+falsepositives:
+    - Modification légitime d'un groupe par un administrateur
+level: critical

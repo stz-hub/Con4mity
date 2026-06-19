@@ -1,0 +1,20 @@
+title: Kerberoasting Detection
+id: 4c5d6e7f-8091-0123-def0-123456789012
+description: Tentative de Kerberoasting via demande de ticket de service
+status: experimental
+tags:
+    - attack.credential_access
+    - attack.t1558.003
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID: 4769              # Demande de ticket de service Kerberos
+        TicketEncryptionType: '0x17' # Chiffrement RC4 faible, signe de Kerberoasting
+    filter:
+        ServiceName|endswith: '$'
+    condition: selection and not filter
+falsepositives:
+    - Demande légitime de ticket Kerberos
+level: high

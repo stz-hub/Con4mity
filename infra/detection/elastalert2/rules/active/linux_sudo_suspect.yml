@@ -1,0 +1,11 @@
+description: "D\xE9tection de toute utilisation sudo suspecte"
+filter:
+- query:
+    query_string:
+      query: message:(*sudo\:\ authentication\ failure* OR *sudo\:\ unable\ to\ resolve\
+        host* OR *user\ NOT\ in\ sudoers* OR *COMMAND\=\/bin\/bash* OR *COMMAND\=\/bin\/sh*)
+index: '*'
+name: Suspicious Sudo usage
+priority: 3
+type: any
+

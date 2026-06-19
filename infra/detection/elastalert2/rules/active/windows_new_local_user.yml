@@ -1,0 +1,11 @@
+description: "D\xE9tection de toute cr\xE9ation de nouvel utilisateur local sur le
+  syst\xE8me"
+filter:
+- query:
+    query_string:
+      query: EventID:4720
+index: '*'
+name: New local user added
+priority: 2
+type: any
+

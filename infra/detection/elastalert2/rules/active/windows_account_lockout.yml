@@ -1,0 +1,10 @@
+description: "D\xE9tection de verrouillage de compte utilisateur"
+filter:
+- query:
+    query_string:
+      query: EventID:4740
+index: '*'
+name: Account Lockout
+priority: 2
+type: any
+

@@ -1,0 +1,20 @@
+title: new user created
+id: 27effdc6-e49b-4496-97e2-dbd48a250e22
+description: Détection de toute création de nouvel utilisateur sur le système
+status: experimental
+tags:
+  - attack.persistence
+  - attack.t1136.001
+logsource:
+  product: linux
+  service: auth
+detection:
+  selection:
+      message|contains:
+          - "useradd: new user"
+          - "new user added"
+          - "adduser"
+  condition: selection
+falsepositives:
+  - Création d'un nouveau compte de service par un administrateur système autorisé 
+level: high

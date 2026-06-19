@@ -1,0 +1,24 @@
+title: New Scheduled Task Created
+id: b59a001d-7e8f-4ecc-9435-80caa6d1a8cc
+description: "Detection de la création d'une nouvelletâche planifiée qui pointe vers un emplacement suspect (ex : dossier temporaire, dossier utilisateur)"
+status: experimental
+tags:
+  - attack.persistence
+  - attack.t1053.005
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+      EventID: 4698
+  filter:
+      TaskContent|contains:
+          - 'C:\Temp\'
+          - 'C:\Users\'
+          - 'C:\ProgramData\'
+          - '%TEMP%'
+          - '%APPDATA%'
+  condition: selection and filter
+falsepositives:
+  - Unknown
+level: high

@@ -1,0 +1,10 @@
+description: "D\xE9tection de connexions RDP successives \xE9chou\xE9es"
+filter:
+- query:
+    query_string:
+      query: EventID:4625 AND LogonType:10
+index: '*'
+name: RDP brute force detection
+priority: 3
+type: any
+

@@ -1,0 +1,12 @@
+description: "Detection de la cr\xE9ation d'une nouvellet\xE2che planifi\xE9e qui
+  pointe vers un emplacement suspect (ex : dossier temporaire, dossier utilisateur)"
+filter:
+- query:
+    query_string:
+      query: EventID:4698 AND (TaskContent:(*C\:\\Temp\\* OR *C\:\\Users\\* OR *C\:\\ProgramData\\*
+        OR *%TEMP%* OR *%APPDATA%*))
+index: '*'
+name: New Scheduled Task Created
+priority: 3
+type: any
+

@@ -1,0 +1,12 @@
+description: "D\xE9tection de la d\xE9sactivation manuelle de Windows Defender par
+  un utilisateur ou processus (ex : installation d'un logiciel malveillant sans connaissance
+  de l'utilisateur)"
+filter:
+- query:
+    query_string:
+      query: EventID:5001
+index: '*'
+name: Windows Defender Disabled
+priority: 4
+type: any
+

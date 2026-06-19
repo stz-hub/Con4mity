@@ -1,0 +1,10 @@
+description: "D\xE9tection de toute cr\xE9ation de nouvel utilisateur sur le syst\xE8me"
+filter:
+- query:
+    query_string:
+      query: message:(*useradd\:\ new\ user* OR *new\ user\ added* OR *adduser*)
+index: '*'
+name: new user created
+priority: 3
+type: any
+

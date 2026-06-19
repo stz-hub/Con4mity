@@ -1,0 +1,11 @@
+description: "D\xE9tection de modification d'un groupe \xE0 privil\xE8ges dans l'AD"
+filter:
+- query:
+    query_string:
+      query: (EventID:(4728 OR 4732 OR 4756)) AND (GroupName:(*Domain\ Admins* OR
+        *Enterprise\ Admins* OR *Schema\ Admins* OR *Administrators*))
+index: '*'
+name: Privilege Group Modified
+priority: 4
+type: any
+

@@ -1,0 +1,11 @@
+description: "D\xE9tection de mouvement lat\xE9ral via connexion r\xE9seau suspecte
+  entre machines"
+filter:
+- query:
+    query_string:
+      query: EventID:4624 AND LogonType:3 AND TargetUserName:*$
+index: '*'
+name: Lateral Movement Detection
+priority: 3
+type: any
+

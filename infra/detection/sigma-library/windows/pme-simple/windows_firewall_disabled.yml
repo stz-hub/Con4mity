@@ -1,0 +1,22 @@
+title: Firewall Disabled and/or Rules Deleted
+id : da5df75c-038c-4694-8339-d56405a18569
+description: Détection de la désactivation du pare-feu Windows
+status: experimental
+tags:
+  - attack.defense_impairment
+  - attack.t1686.003
+logsource:
+  product: windows
+  service: firewall-as
+detection:
+  selection:
+    EventID:
+      - 2002 # Changement d'un paramètre de configuration du pare-feu Windows
+      - 2083 # Changement d'un paramètre de configuration du pare-feu Windows (Windows 11)
+      - 2003 # Un paramètre du pare-feu dans le profil a changé (domaine, privé ou public)
+      - 2082 # Un paramètre du pare-feu dans le profil a changé (Windows 11)
+      - 2008 # Les paramètres de stratégie de groupe du pare-feu ont changé
+  condition: selection
+falsepositives:
+  - Unknown
+level: medium

@@ -1,0 +1,11 @@
+description: "D\xE9tection de toute connexion SSH qui a lieu hors horaires de bureaux
+  classiques"
+filter:
+- query:
+    query_string:
+      query: message:(*Accepted\ password* OR *Accepted\ publickey*)
+index: '*'
+name: SSH Off Hours Detection
+priority: 2
+type: any
+

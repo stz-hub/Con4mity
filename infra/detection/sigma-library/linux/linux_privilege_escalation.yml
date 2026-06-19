@@ -1,0 +1,30 @@
+title: Privilege Escalation detection
+id : fe52d448-54d5-48ed-a542-fc3a756fe02f
+description: Détection de tentatives d'escalade de privilèges
+status: experimental
+tags:
+  - attack.privilege_escalation
+  - attack.t1548
+logsource:
+  product: linux
+  service: auth
+detection:
+  selection_su:
+      message|contains:
+          - "su: (to root)"
+          - "session opened for user root"
+          - "su root"
+  selection_exploit:
+      message|contains:
+          - "pkexec"
+          - "NOPASSWD"
+          - "sudoedit"
+  selection_suspicious:
+      message|contains:
+          - "TTY=unknown"
+          - "PWD=/"
+          - "sudo: sorry, you must have a tty"
+  condition: selection_su or selection_exploit or selection_suspicious
+falsepositives:
+  - Administrateur système légitimement connecté en root
+level: high

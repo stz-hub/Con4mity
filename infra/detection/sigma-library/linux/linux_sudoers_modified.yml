@@ -1,0 +1,20 @@
+title: Sudoers modification
+id : 71b97341-0ba0-4a50-82c6-1f0c68178407
+description: Détection de toute modification des sudoers sur le système
+status: experimental
+tags:
+  - attack.privilege_escalation
+  - attack.t1548.003
+logsource:
+  product: linux
+  service: auth
+detection:
+  selection:
+      message|contains:
+          - "/etc/sudoers"
+          - "sudo: /etc/sudoers.d/user: parsed OK"
+          - "usermod: adding user to group sudo"
+  condition: selection
+falsepositives:
+  - Modification des sudoers par un administrateur système autorisé
+level: critical

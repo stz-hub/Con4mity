@@ -1,0 +1,12 @@
+description: "D\xE9tection de la cr\xE9ation d'un nouveau compte administrateur dans
+  l'Active Directory"
+filter:
+- query:
+    query_string:
+      query: EventID:4720 AND (EventID:4732 AND (GroupName:(*Administrators* OR *Domain\
+        Admins*)))
+index: '*'
+name: New Admin Account Created in AD
+priority: 4
+type: any
+

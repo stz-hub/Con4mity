@@ -1,0 +1,18 @@
+title: RDP brute force detection
+id : 35ca45e3-0123-43f9-9456-e92bc2bd2ef8
+description: Détection de connexions RDP successives échouées
+status: experimental
+tags:
+    - attack.credential_access
+    - attack.t1110.001
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4625
+    LogonType: 10
+  condition: selection
+falsepositives:
+  - Unknown
+level: high
