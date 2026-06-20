@@ -1,17 +1,19 @@
-# Infra — Configurations des services Con4mity
+# infra/ — composants CON4MITY
 
-Configurations centralisées de chaque CT de développement, pré-requis pour le déploiement final sur Raspberry Pi.
+| Dossier | Rôle |
+|---------|------|
+| `collector/` | Fluent Bit : collecte et parsing des logs |
+| `opensearch/` | OpenSearch : stockage et indexation |
+| `correlator/` | Déprécié — la corrélation est assurée par ElastAlert2 |
+| `detection/` | ElastAlert2 + bibliothèque Sigma + scripts |
 
-## Structure
+## Stack de test (tout-en-un)
 
-- `collector/` — Fluent Bit (CT 100, Kylian) : collecte et parsing des logs
-- `opensearch/` — OpenSearch (CT 101, Nikita) : stockage et indexation
-- `correlator/` — Moteur de corrélation Python (CT 101, Nikita)
-- `detection/` — ElastAlert2 + règles Sigma (CT 102, Jean Pierre)
-- `database/` — PostgreSQL (CT 104)
+```bash
+cp .env.example .env            # éditer les valeurs
+sudo sysctl -w vm.max_map_count=262144
+docker compose -f docker-compose.test.yml --env-file .env up -d
+```
 
-Le backend et le frontend sont dans `/backend/` et `/frontend/` à la racine du repo.
-
-## Déploiement sur Pi
-
-À terme, toutes ces configs seront fusionnées dans un `docker-compose.yml` unique à la racine.
+Chaque sous-dossier a aussi son propre `docker-compose.yml` pour un déploiement séparé.
+La configuration (IP, token…) vient du `.env` — rien n'est codé en dur.

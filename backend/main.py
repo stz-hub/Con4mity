@@ -83,7 +83,7 @@ _login_fail_ts: dict[str, list[float]] = {}
 PG_HOST = os.getenv("PG_HOST", "192.168.0.104")
 PG_NAME = os.getenv("PG_NAME", "con4mity")
 PG_USER = os.getenv("PG_USER", "con4mity")
-PG_PASSWORD = os.getenv("PG_PASSWORD", "Con4mity2024")
+PG_PASSWORD = os.getenv("PG_PASSWORD", "")
 
 OS_HOST = os.getenv("OS_HOST", "192.168.0.101")
 OS_PORT = int(os.getenv("OS_PORT", "9200"))

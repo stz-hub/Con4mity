@@ -1,10 +1,23 @@
-description: "D\xE9tection de connexions RDP successives \xE9chou\xE9es"
+description: Détection de connexions RDP successives échouées
 filter:
 - query:
     query_string:
       query: EventID:4625 AND LogonType:10
-index: '*'
+index: con4mity-logs-*
 name: RDP brute force detection
 priority: 3
 type: any
-
+timestamp_field: '@timestamp'
+alert:
+- post
+http_post_url: http://__DASHBOARD__/api/webhook/alert
+http_post_headers:
+  X-Webhook-Token: __TOKEN__
+  Content-Type: application/json
+http_post_static_payload:
+  rule_name: RDP brute force detection
+  severity: high
+http_post_payload:
+  host: host
+realert:
+  minutes: 1

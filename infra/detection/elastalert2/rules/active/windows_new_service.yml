@@ -1,12 +1,25 @@
-description: "Detection de la cr\xE9ation d'une nouvellet\xE2che planifi\xE9e qui
-  pointe vers un emplacement suspect (ex : dossier temporaire, dossier utilisateur)"
+description: 'Detection de la création d''une nouvelletâche planifiée qui pointe vers
+  un emplacement suspect (ex : dossier temporaire, dossier utilisateur)'
 filter:
 - query:
     query_string:
       query: EventID:4698 AND (TaskContent:(*C\:\\Temp\\* OR *C\:\\Users\\* OR *C\:\\ProgramData\\*
         OR *%TEMP%* OR *%APPDATA%*))
-index: '*'
+index: con4mity-logs-*
 name: New Scheduled Task Created
 priority: 3
 type: any
-
+timestamp_field: '@timestamp'
+alert:
+- post
+http_post_url: http://__DASHBOARD__/api/webhook/alert
+http_post_headers:
+  X-Webhook-Token: __TOKEN__
+  Content-Type: application/json
+http_post_static_payload:
+  rule_name: New Scheduled Task Created
+  severity: high
+http_post_payload:
+  host: host
+realert:
+  minutes: 1

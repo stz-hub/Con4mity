@@ -1,12 +1,24 @@
-description: "D\xE9tection de tentatives de connexions SSH Root (\xE9chou\xE9es et
-  r\xE9ussies)"
+description: Détection de tentatives de connexions SSH Root (échouées et réussies)
 filter:
 - query:
     query_string:
       query: message:(*Failed\ password\ for\ root* OR *Accepted\ password\ for\ root*
         OR *Accepted\ publickey\ for\ root*)
-index: '*'
+index: con4mity-logs-*
 name: SSH Root Login Detection
 priority: 4
 type: any
-
+timestamp_field: '@timestamp'
+alert:
+- post
+http_post_url: http://__DASHBOARD__/api/webhook/alert
+http_post_headers:
+  X-Webhook-Token: __TOKEN__
+  Content-Type: application/json
+http_post_static_payload:
+  rule_name: SSH Root Login Detection
+  severity: critical
+http_post_payload:
+  host: host
+realert:
+  minutes: 1

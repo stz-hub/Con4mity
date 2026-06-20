@@ -1,8 +1,0 @@
-services:
-  elastalert:
-    image: jertel/elastalert2:latest
-    volumes:
-      - ./rules:/opt/elastalert/rules
-      - ./config.yaml:/opt/elastalert/config.yaml
-    command: ["--verbose", "--config", "/opt/elastalert/config.yaml"]
-    restart: unless-stopped

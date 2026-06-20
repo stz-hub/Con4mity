@@ -9,3 +9,6 @@ venv/
 *.egg-info/
 backend/.venv/
 *.bak
+
+infra/.env
+infra/detection/elastalert2/rules/rendered/

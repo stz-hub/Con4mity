@@ -1,10 +1,23 @@
-description: "D\xE9tection de toute cr\xE9ation de nouvel utilisateur sur le syst\xE8me"
+description: Détection de toute création de nouvel utilisateur sur le système
 filter:
 - query:
     query_string:
       query: message:(*useradd\:\ new\ user* OR *new\ user\ added* OR *adduser*)
-index: '*'
+index: con4mity-logs-*
 name: new user created
 priority: 3
 type: any
-
+timestamp_field: '@timestamp'
+alert:
+- post
+http_post_url: http://__DASHBOARD__/api/webhook/alert
+http_post_headers:
+  X-Webhook-Token: __TOKEN__
+  Content-Type: application/json
+http_post_static_payload:
+  rule_name: new user created
+  severity: high
+http_post_payload:
+  host: host
+realert:
+  minutes: 1

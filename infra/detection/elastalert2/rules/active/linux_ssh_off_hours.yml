@@ -1,11 +1,24 @@
-description: "D\xE9tection de toute connexion SSH qui a lieu hors horaires de bureaux
-  classiques"
+description: Détection de toute connexion SSH qui a lieu hors horaires de bureaux
+  classiques
 filter:
 - query:
     query_string:
       query: message:(*Accepted\ password* OR *Accepted\ publickey*)
-index: '*'
+index: con4mity-logs-*
 name: SSH Off Hours Detection
 priority: 2
 type: any
-
+timestamp_field: '@timestamp'
+alert:
+- post
+http_post_url: http://__DASHBOARD__/api/webhook/alert
+http_post_headers:
+  X-Webhook-Token: __TOKEN__
+  Content-Type: application/json
+http_post_static_payload:
+  rule_name: SSH Off Hours Detection
+  severity: medium
+http_post_payload:
+  host: host
+realert:
+  minutes: 1

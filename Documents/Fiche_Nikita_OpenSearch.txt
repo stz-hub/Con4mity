@@ -1,94 +1,0 @@
-﻿CON4MITY
-SIEM Open Source pour PME
-NIKITA BELII
-Stockage, Indexation & Corrélation
-Chef de projet · CT 101 · 192.168.0.101
-OTERIA · Promo 2025-2026
-
-Contexte du projet
-Con4mity est un SIEM open source pour PME. Le Pi 5 (8 Go RAM) fait tourner tous les services Docker. La brique de Nikita est centrale - tout passe par OpenSearch. Kylian envoie les logs dedans, Jean Pierre les surveille depuis là, Rayan les affiche depuis là.
-
-Rôle de Nikita
-Le stockage est le cerveau du système. OpenSearch reçoit des milliers de logs par heure, les indexe pour les rendre searchables en millisecondes, et les conserve selon une politique de rétention définie. Sans OpenSearch, il n'y a ni détection, ni dashboard, ni historique.
-En parallèle, Nikita gère PostgreSQL sur le CT 104 - c'est la base de données structurée qui stocke les alertes générées, les comptes utilisateurs du dashboard, et les règles de détection. OpenSearch stocke les logs bruts en masse, PostgreSQL stocke les données structurées et relationnelles.
-Le moteur de corrélation est la mission la plus avancée : il s'agit de détecter des patterns complexes en reliant plusieurs événements entre eux. Par exemple, 3 échecs de connexion SSH suivis d'un succès 5 minutes après sur la même machine, c'est probablement une compromission - mais chaque événement seul n'est pas alarmant.
-
-Architecture du stockage
-FluxDescriptionFilebeat → OpenSearchLes logs arrivent en continu et sont indexés dans con4mity-logs-AAAA.MM.JJElastAlert → OpenSearchElastAlert (JP) interroge OpenSearch pour détecter les anomaliesElastAlert → PostgreSQLLes alertes déclenchées sont stockées dans la table alertsDashboard → OpenSearchRayan interroge OpenSearch pour afficher les logs en temps réelDashboard → PostgreSQLRayan interroge PostgreSQL pour afficher et gérer les alertesILM → SuppressionAprès 90 jours, les vieux index sont supprimés automatiquement
-Accès et informations
-InformationValeurCT ProxmoxCT 101IP du CT192.168.0.101Accès Proxmoxhttps://con4mity.duckdns.org:33000Login Proxmoxnikita ou nikita@pve - choisir pve dans le menu RealmMot de passe ProxmoxCon4mity2024Accès au CTDans Proxmox : cliquer sur CT 101 → Console, ou Shell → pct enter 101Dossier projet/opt/con4mity/OpenSearch URLhttp://192.168.0.101:9200OpenSearch heap3 Go (Pi 5 8 Go - on peut se permettre plus que le Pi 4)CT PostgreSQLCT 104 - 192.168.0.104:5432User PostgreSQLcon4mity / Con4mity2024
-Ce qui est déjà en place
-ÉlémentÉtat et détailsDockerInstallé et actif sur CT 101OpenSearch 2.11Tourne dans Docker - répond sur :9200 - 1 Go heap (à augmenter à 3 Go)Index templatecon4mity-logs-* configuré avec les champs : received_at, host, severity, source, raw_messagePolitique ILMSuppression automatique des index après 90 jours - configurée via ISM OpenSearchPostgreSQL 15Installé directement sur CT 104 (pas Docker) - port 5432Tables PostgreSQLalerts, rules, users, sources - créées et accessibles depuis tous les CTsAccès réseau PGAutorisé pour tout le sous-réseau 192.168.0.0/24
-Outils utilisés
-OpenSearch 2.11
-Moteur de recherche et de stockage open source, fork d'Elasticsearch sous licence Apache 2.0. Les logs arrivent sous forme de documents JSON dans des index nommés con4mity-logs-AAAA.MM.JJ. OpenSearch les indexe automatiquement pour permettre des recherches très rapides même sur des millions de logs.
-Sur le Pi 5 avec 8 Go de RAM, on alloue 3 Go de heap à OpenSearch (la variable OPENSEARCH_JAVA_OPTS). C'est largement supérieur au Pi 4 où on était limité à 1 Go - les performances de recherche seront bien meilleures.
-
-ISM - Index State Management
-Système intégré à OpenSearch qui gère le cycle de vie des index. La politique de rétention de 90 jours qu'on a configurée utilise ISM : quand un index a plus de 90 jours, ISM le supprime automatiquement. Sans ça, les index s'accumulent indéfiniment et le disque sature.
-
-PostgreSQL 15
-Base de données relationnelle installée sur le CT 104. Elle stocke les données structurées : alertes avec leur statut, utilisateurs du dashboard avec leurs rôles, règles de détection, sources surveillées. C'est la base que Rayan interroge pour afficher et gérer les alertes dans son interface.
-
-Docker et Docker Compose
-OpenSearch tourne dans un conteneur Docker sur le CT 101. Le docker-compose.yml configure les ressources allouées (heap, volumes) et les ports exposés.
-
-Missions
-
-Mission 1  -  Augmenter le heap OpenSearch à 3 Go
-Pourquoi : 
-On est sur Pi 5 avec 8 Go de RAM. Le heap actuel est à 1 Go - c'était la contrainte du Pi 4. Avec 8 Go disponibles, on peut allouer 3 Go à OpenSearch pour de bien meilleures performances d'indexation et de recherche.
-Ce qu'il faut faire :
-• Aller dans /opt/con4mity/ et modifier le docker-compose.yml
-• Changer la variable OPENSEARCH_JAVA_OPTS de -Xms512m -Xmx1g à -Xms3g -Xmx3g
-• Redémarrer OpenSearch : docker-compose down puis docker-compose up -d
-• Vérifier que le service redémarre bien : docker-compose logs -f - attendre le message 'started'
-• Vérifier la RAM allouée : curl http://localhost:9200/_nodes/stats/jvm?pretty | grep heap_max
-Mission 2  -  Vérifier la réception des logs de Kylian
-Pourquoi : 
-Une fois que Kylian a configuré Filebeat, les logs doivent arriver dans OpenSearch. Cette vérification confirme que les deux briques communiquent bien.
-Ce qu'il faut faire :
-• Interroger l'API OpenSearch pour voir les index : curl http://localhost:9200/_cat/indices?v
-• Vérifier qu'un index con4mity-logs-AAAA.MM.JJ existe avec des documents dedans
-• Inspecter quelques logs pour vérifier qu'ils ont les bons champs (host, severity, raw_message)
-• Si aucun index n'apparaît, vérifier avec Kylian que son Filebeat pointe bien vers 192.168.0.101:9200
-• Surveiller le nombre de documents qui augmente : curl http://localhost:9200/_cat/count/con4mity-logs-*
-Mission 3  -  Créer les utilisateurs OpenSearch pour chaque membre
-Pourquoi : 
-Actuellement OpenSearch est accessible sans mot de passe (DISABLE_SECURITY_PLUGIN=true). Pour l'instant c'est acceptable en dev, mais il faut préparer les comptes. Chaque service doit avoir un compte avec uniquement les droits dont il a besoin - principe du moindre privilège.
-Ce qu'il faut faire :
-• Créer un compte pour Filebeat (Kylian) avec les droits d'écriture uniquement sur l'index con4mity-logs-*
-• Créer un compte pour ElastAlert (Jean Pierre) avec les droits de lecture sur con4mity-logs-* et d'écriture sur elastalert_status
-• Créer un compte pour le dashboard (Rayan) avec les droits de lecture seule sur con4mity-logs-*
-• Créer un compte admin avec tous les droits pour la maintenance
-• Documenter tous ces comptes dans un fichier sécurisé (pas sur Git)
-Mission 4  -  Développer le moteur de corrélation
-Pourquoi : 
-C'est la mission la plus complexe et la plus importante techniquement. Le moteur de corrélation permet de détecter des attaques qui nécessitent de relier plusieurs événements entre eux. Un seul événement isolé peut sembler anodin - c'est leur combinaison qui révèle l'attaque.
-Ce qu'il faut faire :
-• Commencer par comprendre les agrégations OpenSearch : c'est la fonctionnalité qui permet de compter, grouper et analyser des événements sur une fenêtre temporelle
-• Exemple simple à implémenter en premier : détecter 3 échecs de connexion (event_type: auth_failure) suivis d'un succès (event_type: auth_success) dans les 10 minutes sur le même host
-• Créer un script Python qui interroge OpenSearch toutes les minutes, exécute les corrélations, et écrit les résultats dans la table alerts de PostgreSQL
-• Tester avec de vraies données : générer des faux échecs de connexion et vérifier que la corrélation se déclenche
-• Cas à couvrir en priorité : SSH brute-force + succès, scan de ports progressif, escalade de privilèges (connexion normale puis commande sudo), connexion depuis une nouvelle IP jamais vue
-• Documenter chaque règle de corrélation avec : ce qu'elle détecte, la logique de détection, et les faux positifs possibles
-Mission 5  -  Assurer la disponibilité de PostgreSQL
-Pourquoi : 
-PostgreSQL sur le CT 104 est la base commune que tout le monde utilise. Il faut s'assurer qu'il reste accessible et que le schéma est correct pour que Rayan puisse s'y connecter depuis son backend.
-Ce qu'il faut faire :
-• Vérifier que PostgreSQL tourne : systemctl status postgresql depuis le CT 104
-• Tester la connexion depuis le CT 101 : psql -h 192.168.0.104 -U con4mity -d con4mity -c '\dt'
-• Vérifier que les 4 tables sont bien présentes : alerts, rules, users, sources
-• Insérer un utilisateur de test dans la table users pour que Rayan puisse tester son système de login
-• Documenter le schéma complet pour que Rayan sache exactement quels champs sont disponibles dans chaque table
-Mission 6  -  Monitorer les ressources
-Pourquoi : 
-Avec 8 Go de RAM sur le Pi 5 et OpenSearch à 3 Go de heap, il faut surveiller que le système reste stable. Un OpenSearch qui manque de mémoire se met à paginer sur le disque et devient très lent.
-Ce qu'il faut faire :
-• Vérifier régulièrement l'utilisation de la mémoire heap : curl http://localhost:9200/_nodes/stats/jvm?pretty
-• Si le heap_used_percent dépasse 85%, c'est un signal d'alerte - il faut optimiser ou augmenter le heap
-• Surveiller la taille des index qui grossissent : curl http://localhost:9200/_cat/indices?v&s=store.size:desc
-• Vérifier que la politique ILM fonctionne bien - les index de plus de 90 jours doivent disparaître automatiquement
-• Documenter les commandes de monitoring pour que l'équipe puisse vérifier l'état du système rapidement
-Con4mity · Fiche Nikita · Stockage & Corrélation · OTERIA 2025-2026
-

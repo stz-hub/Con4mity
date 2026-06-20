@@ -1,229 +1,0 @@
-﻿CON4MITY
-SIEM Open Source pour PME
-Guide de mise en production
-Hardening · Sécurisation · Déploiement client
-OTERIA · Promo 2025-2026
-
-Introduction
-Ce document liste tout ce qu'il faut faire après avoir terminé les missions de développement pour pouvoir tester Con4mity dans un vrai environnement client. Il y a deux grandes étapes : la sécurisation du système (hardening), et le déploiement physique chez le client.
-Les actions sont classées par priorité. Certaines sont bloquantes - sans elles, on ne peut pas présenter le produit à un client. D'autres améliorent la robustesse et la conformité mais peuvent être faites progressivement.
-
-
-État actuel - ce qui est fait et ce qui manque
-Ce qui fonctionne
-• OpenSearch tourne et stocke les logs avec un index template et une politique de rétention 90 jours
-• PostgreSQL tourne avec les 4 tables du projet (alerts, rules, users, sources)
-• Docker est installé sur tous les CTs
-• Les CTs communiquent entre eux sur le réseau 192.168.0.0/24
-• La structure du projet existe sur chaque CT dans /opt/con4mity/
-
-Ce qui manque encore
-• Filebeat non configuré - les logs ne remontent pas encore dans OpenSearch
-• ElastAlert2 non configuré - pas de détection active
-• Dashboard Rayan non développé - pas d'interface utilisateur
-• OpenSearch tourne sans authentification - accès libre sur le réseau
-• Pas de TLS entre les services - communications en clair
-• Pas de pare-feu sur les CTs - tous les ports sont ouverts
-• Pas de LUKS sur le stockage - données non chiffrées à terme
-• Mots de passe identiques partout - non acceptable en production
-
-
-Phase 1 - Finaliser le développement
-Avant de penser à la sécurisation, chacun doit avoir terminé sa mission de développement. Sans ça, il n'y a rien à sécuriser ni à déployer.
-
-Checklist de fin de développement
-☐  Kylian - Filebeat configuré et logs qui arrivent dans OpenSearch
-☐  Nikita - Moteur de corrélation développé et testé
-☐  Jean Pierre - 20+ règles Sigma écrites, testées, sans faux positifs
-☐  Rayan - Backend FastAPI opérationnel + dashboard accessible
-☐  Test de bout en bout : log généré → collecté → stocké → détecté → alerte → visible dans le dashboard
-Le test de bout en bout est la vraie validation que le projet fonctionne. Il faut simuler une attaque simple (par exemple 10 tentatives de connexion SSH en 60 secondes) et vérifier que l'alerte remonte dans le dashboard.
-
-
-Phase 2 - Hardening et sécurisation
-C'est la phase critique avant tout test en entreprise. Un SIEM non sécurisé est un paradoxe - un outil de sécurité qui n'est pas lui-même sécurisé n'a aucune crédibilité face à un client.
-
-2.1 - Authentification OpenSearch
-Actuellement OpenSearch tourne avec le plugin de sécurité désactivé. N'importe qui sur le réseau peut lire, modifier ou supprimer tous les logs. C'est le point le plus critique à corriger.
-Ce qu'il faut faire :
-• Supprimer la variable DISABLE_SECURITY_PLUGIN du docker-compose
-• Activer le plugin de sécurité OpenSearch
-• Créer des utilisateurs dédiés : un compte admin, un compte Filebeat en écriture seule, un compte Rayan en lecture seule, un compte ElastAlert en lecture seule
-• Chaque service ne doit avoir accès qu'à ce dont il a besoin - principe du moindre privilège
-Responsable : Nikita
-
-2.2 - Chiffrement des communications (TLS)
-Actuellement toutes les communications entre les services se font en HTTP non chiffré. En production, un attaquant sur le réseau local pourrait lire les logs en transit.
-Ce qu'il faut faire :
-• Générer des certificats TLS pour OpenSearch (auto-signés ou via Let's Encrypt)
-• Configurer Filebeat pour envoyer les logs en HTTPS vers OpenSearch
-• Configurer ElastAlert pour interroger OpenSearch en HTTPS
-• Configurer le dashboard de Rayan pour être accessible en HTTPS uniquement
-• Configurer PostgreSQL pour accepter les connexions SSL
-Responsable : Kylian + Nikita
-
-2.3 - Pare-feu sur chaque service
-Aucun service ne devrait être accessible depuis n'importe où. Chaque port doit être ouvert uniquement pour les IPs qui en ont besoin.
-Ce qu'il faut faire :
-• Installer et configurer ufw (Uncomplicated Firewall) sur chaque CT
-• OpenSearch port 9200 : accessible uniquement depuis les IPs de Filebeat, ElastAlert et le dashboard
-• PostgreSQL port 5432 : accessible uniquement depuis l'IP du dashboard de Rayan et d'ElastAlert
-• Dashboard port 443 : accessible depuis le réseau local uniquement
-• Port 514 UDP (Syslog) : accessible uniquement depuis les machines surveillées
-• Bloquer tout le reste par défaut
-Responsable : Tous
-
-2.4 - Gestion des secrets et mots de passe
-Le mot de passe Con4mity2024 est utilisé partout. En production chaque service doit avoir un secret différent, fort, et jamais stocké en clair dans le code.
-Ce qu'il faut faire :
-• Créer un fichier .env à la racine du projet avec tous les secrets
-• Ajouter .env au fichier .gitignore pour ne jamais le commiter sur Git
-• Utiliser des mots de passe forts et uniques pour chaque service
-• Le docker-compose.yml doit référencer les variables du .env avec ${VARIABLE} sans jamais mettre les valeurs en dur
-Responsable : Nikita + Tous
-
-2.5 - Chiffrement du stockage (LUKS)
-Le mini-PC qui stocke les logs à long terme doit avoir son disque entièrement chiffré. Si le matériel est volé chez un client, les données doivent être illisibles.
-Ce qu'il faut faire :
-• Installer Debian 12 sur le mini-PC
-• Chiffrer le disque de stockage avec LUKS AES-256 pendant l'installation
-• Configurer le montage NFS pour que le Pi puisse y écrire les logs
-• Tester que si le disque est branché sur une autre machine, les données sont illisibles sans la clé
-Responsable : Kylian + Nikita
-
-2.6 - Accès SSH par clé uniquement
-Sur les machines déployées chez un client, l'accès SSH par mot de passe doit être désactivé. Seule une clé SSH autorisée doit permettre de se connecter.
-Ce qu'il faut faire :
-• Générer une paire de clés SSH pour l'équipe
-• Déposer la clé publique sur le Pi et le mini-PC
-• Désactiver l'authentification par mot de passe dans /etc/ssh/sshd_config
-• Désactiver la connexion root directe en SSH
-Responsable : Kylian
-
-2.7 - Processus Docker sans root
-Par défaut Docker tourne avec les droits root. En cas de compromission d'un conteneur, un attaquant aurait les droits root sur la machine hôte.
-Ce qu'il faut faire :
-• Créer un utilisateur système dédié con4mity sans droits sudo
-• Ajouter cet utilisateur au groupe docker
-• S'assurer que tous les services tournent sous cet utilisateur et non root
-Responsable : Nikita
-
-2.8 - Mises à jour automatiques de sécurité
-Le Pi et le mini-PC doivent appliquer automatiquement les patchs de sécurité Debian. Une machine qui n'est pas à jour est une machine vulnérable.
-Ce qu'il faut faire :
-• Installer unattended-upgrades sur Debian
-• Configurer les mises à jour automatiques pour les patchs de sécurité uniquement
-• Vérifier que les mises à jour ne redémarrent pas les services sans prévenir
-Responsable : Kylian
-
-
-Phase 3 - Déploiement sur Raspberry Pi 5
-Une fois le développement terminé et le hardening fait, on assemble tout sur le Pi. C'est à ce moment qu'on passe de l'environnement de dev (Proxmox) à la machine finale.
-
-3.1 - Préparer le Pi
-• Installer Raspberry Pi OS Lite 64 bits (version sans interface graphique)
-• Mettre à jour le système complètement
-• Installer Docker et Docker Compose
-• Créer l'utilisateur système con4mity
-• Configurer l'accès SSH par clé uniquement
-• Configurer le pare-feu ufw
-
-3.2 - Préparer le mini-PC de stockage
-• Installer Debian 12 avec LUKS sur le disque de stockage
-• Configurer le serveur NFS pour exposer le dossier de logs au Pi
-• Vérifier que le Pi peut monter le volume NFS
-• Tester l'écriture et la lecture depuis le Pi
-
-3.3 - Assembler le docker-compose.yml final
-C'est l'étape clé. On regroupe les docker-compose.yml de chaque CT en un seul fichier.
-• Filebeat (Kylian) - collecte les logs et écoute le port 514
-• OpenSearch (Nikita) - stocke les logs avec 3 Go de heap
-• ElastAlert (Jean Pierre) - surveille et déclenche les alertes
-• Dashboard (Rayan) - interface web accessible en HTTPS
-• PostgreSQL - base de données commune
-• Volume NFS monté sur le mini-PC pour le stockage long terme
-Tous les secrets viennent du fichier .env - aucun mot de passe en dur dans le fichier.
-
-3.4 - Test complet sur Pi avant livraison
-• Brancher le Pi sur un réseau de test
-• Lancer docker compose up -d et vérifier que tous les services démarrent
-• Envoyer des logs de test depuis une machine Windows et une machine Linux
-• Vérifier que les logs apparaissent dans le dashboard
-• Simuler une attaque (SSH brute-force) et vérifier que l'alerte remonte
-• Tester l'acquittement de l'alerte depuis le dashboard
-• Vérifier que les logs s'écrivent bien sur le mini-PC via NFS
-• Redémarrer le Pi et vérifier que tous les services reprennent automatiquement
-
-
-Phase 4 - Installation chez le client
-C'est la phase finale. On arrive chez le client avec le matériel pré-configuré.
-
-Ce que le client doit fournir
-• Un port switch disponible (idéalement avec support VLAN)
-• Une prise électrique pour le Pi et le mini-PC
-• L'accès aux machines à surveiller pour installer les agents
-• Les identifiants réseau si les machines sont derrière un pare-feu
-
-Ce qu'on apporte
-• Raspberry Pi 5 pré-configuré avec tous les services Docker
-• Mini-PC avec disque chiffré LUKS et NFS configuré
-• Câbles réseau
-• Clé USB avec les scripts d'installation des agents (Winlogbeat pour Windows, config Syslog pour Linux et switches)
-
-Étapes d'installation sur site
-• Brancher le Pi et le mini-PC sur le switch du client
-• Configurer les IPs statiques selon le réseau du client (modifier le .env)
-• Relancer docker compose up -d avec la bonne configuration
-• Installer Winlogbeat sur chaque machine Windows à surveiller
-• Activer Syslog sur les switches et routeurs
-• Vérifier que les logs arrivent dans le dashboard
-• Montrer au client comment accéder au dashboard et lire les alertes
-• Laisser un document de contact et de maintenance
-
-
-Tableau récapitulatif des actions
-
-ActionResponsablePrioritéTerminer le pipeline Filebeat → OpenSearchKylianBLOQUANTTerminer ElastAlert + 20 règles SigmaJean PierreBLOQUANTTerminer le dashboard et le backendRayanBLOQUANTTerminer le moteur de corrélationNikitaBLOQUANTTest de bout en bout fonctionnelTousBLOQUANTActiver l'authentification OpenSearchNikitaCRITIQUEMettre en place TLS entre les servicesKylian + NikitaCRITIQUEConfigurer le pare-feu sur chaque CTTousCRITIQUESéparer les mots de passe dans un .envTousCRITIQUEChiffrement LUKS sur le mini-PCKylian + NikitaIMPORTANTSSH par clé uniquement sur le PiKylianIMPORTANTDocker sans rootNikitaIMPORTANTMises à jour automatiques DebianKylianIMPORTANTTest complet sur Raspberry Pi 5TousIMPORTANTInstallation et test chez un client piloteTousOBJECTIF
-
-Conformité et normes
-Pour être présentable à un client professionnel, voici les points de conformité à respecter.
-
-RGPD - Ce qui nous concerne
-Les logs peuvent contenir des données personnelles (noms d'utilisateurs, IPs, horodatages d'activité).
-Obligation de rétention limitée - notre politique de 90 jours chauds + 1 an froid est conforme.
-Obligation de chiffrement des données - LUKS sur le mini-PC + TLS en transit.
-Le client doit être informé de quelles données sont collectées et pourquoi.
-Prévoir une procédure de suppression des données à la demande du client.
-LPM / LCEN - Obligation légale française
-Conservation des logs d'accès pendant minimum 1 an - notre politique est conforme.
-Les logs doivent être intègres - ne pas permettre leur modification ou suppression avant la fin de la période.
-OpenSearch avec ISM garantit la suppression automatique mais pas la protection contre la modification - à renforcer.
-Bonnes pratiques ANSSI
-Principe du moindre privilège - chaque service a uniquement les droits dont il a besoin.
-Séparation des environnements - réseau dédié pour le SIEM (VLAN).
-Journalisation des accès au dashboard - qui s'est connecté, quand, et quelles actions.
-Sauvegarde de la configuration - le docker-compose.yml et le .env doivent être sauvegardés.
-
-Maintenance après déploiement
-Une fois le système en place chez un client, voici ce qu'il faut faire régulièrement pour que ça reste opérationnel et sécurisé.
-
-Chaque semaine
-• Vérifier que tous les services Docker tournent - docker compose ps
-• Vérifier que des logs arrivent bien dans OpenSearch - des index doivent se créer chaque jour
-• Vérifier qu'aucune alerte critique n'a été ignorée
-
-Chaque mois
-• Vérifier l'espace disque sur le mini-PC - la politique de rétention gère l'espace mais surveiller quand même
-• Vérifier que les mises à jour de sécurité ont bien été appliquées
-• Tester qu'une alerte de test se déclenche bien - valider que la détection est toujours active
-• Mettre à jour les images Docker si de nouvelles versions de sécurité sont disponibles
-
-En cas de panne
-• Se connecter en SSH sur le Pi
-• Vérifier les logs des conteneurs avec docker compose logs
-• Si un conteneur est arrêté, le redémarrer avec docker compose up -d
-• Si OpenSearch a crashé (manque de mémoire), vérifier la RAM disponible et redémarrer
-• Si les logs n'arrivent plus, vérifier Filebeat en premier - c'est le collecteur
-
-Con4mity · Guide de mise en production · OTERIA 2025-2026
-

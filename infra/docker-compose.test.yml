@@ -1,0 +1,56 @@
+# CON4MITY - stack de test : OpenSearch + Fluent Bit + ElastAlert2 d'un seul coup.
+# Usage :
+#   cd infra && cp .env.example .env && $EDITOR .env
+#   sudo sysctl -w vm.max_map_count=262144
+#   docker compose -f docker-compose.test.yml --env-file .env up -d
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: con4mity_opensearch
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=-Xms${OPENSEARCH_HEAP:-2g} -Xmx${OPENSEARCH_HEAP:-2g}
+      - DISABLE_SECURITY_PLUGIN=true
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+    restart: unless-stopped
+
+  fluentbit:
+    image: fluent/fluent-bit:latest
+    container_name: con4mity_fluentbit
+    user: root
+    depends_on: [opensearch]
+    environment:
+      - FLB_HOSTNAME=${FLB_HOSTNAME:-con4mity-collector}
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+    volumes:
+      - ./collector/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./collector/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - /var/log:/var/log:ro
+      - flb-db:/tmp
+    command: /fluent-bit/bin/fluent-bit -c /fluent-bit/etc/fluent-bit.conf -R /fluent-bit/etc/parsers.conf
+    restart: unless-stopped
+
+  elastalert2:
+    image: jertel/elastalert2:latest
+    container_name: con4mity_elastalert2
+    depends_on: [opensearch]
+    environment:
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+      - DASHBOARD_IP=${DASHBOARD_IP}
+      - DASHBOARD_PORT=${DASHBOARD_PORT:-8090}
+      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN}
+    volumes:
+      - ./detection/elastalert2/rules/active:/opt/elastalert/rules/active:ro
+      - ./detection/elastalert2/config.yaml.template:/opt/elastalert/config.yaml.template:ro
+      - ./detection/elastalert2/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    restart: unless-stopped
+
+volumes:
+  opensearch-data:
+  flb-db:

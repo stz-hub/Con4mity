@@ -1,11 +1,23 @@
-description: "D\xE9tection de toute cr\xE9ation de nouvel utilisateur local sur le
-  syst\xE8me"
+description: Détection de toute création de nouvel utilisateur local sur le système
 filter:
 - query:
     query_string:
       query: EventID:4720
-index: '*'
+index: con4mity-logs-*
 name: New local user added
 priority: 2
 type: any
-
+timestamp_field: '@timestamp'
+alert:
+- post
+http_post_url: http://__DASHBOARD__/api/webhook/alert
+http_post_headers:
+  X-Webhook-Token: __TOKEN__
+  Content-Type: application/json
+http_post_static_payload:
+  rule_name: New local user added
+  severity: medium
+http_post_payload:
+  host: host
+realert:
+  minutes: 1

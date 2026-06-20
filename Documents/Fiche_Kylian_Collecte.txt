@@ -1,110 +1,0 @@
-﻿CON4MITY
-SIEM Open Source pour PME
-KYLIAN DELOUIS
-Collecte & Pipeline
-CT 100 · 192.168.0.100
-OTERIA · Promo 2025-2026
-
-Contexte du projet
-Con4mity est un SIEM (Security Information and Event Management) open source pour PME. C'est un système qui collecte les logs de toutes les machines d'un réseau, les stocke, les analyse, et déclenche des alertes quand quelque chose d'anormal est détecté.
-Le projet fonctionne avec un Raspberry Pi 5 (8 Go de RAM) qui fait tourner tous les services. Chaque membre de l'équipe s'occupe d'une brique :
-• Kylian - Collecte les logs et les envoie vers le stockage
-• Nikita - Stocke et indexe les logs dans OpenSearch, gère la base PostgreSQL
-• Jean Pierre - Détecte les attaques via des règles de sécurité
-• Rayan - Développe le dashboard web que le client utilise
-
-Rôle de Kylian
-La collecte c'est le premier maillon de toute la chaîne. Sans les logs, personne n'a rien à analyser. Le rôle consiste à s'assurer que les logs de toutes les machines de la PME arrivent proprement et de façon sécurisée sur le Raspberry Pi.
-Les logs sont des fichiers texte que chaque machine génère en permanence - chaque connexion réussie ou échouée, chaque erreur système, chaque action d'un utilisateur est enregistrée. C'est cette matière première qu'on collecte pour détecter les attaques.
-Un point crucial : on ne collecte pas tout. Si on envoie 100% des logs bruts, le stockage saturerait en quelques jours. On ne garde que 10 à 15% du volume brut - uniquement les événements de sécurité pertinents. C'est Filebeat qui fait ce filtrage à la source.
-
-Architecture de la collecte
-Voici comment les logs arrivent sur le Pi :
-SourceComment ça arrivePCs WindowsVia Winlogbeat - un agent installé sur chaque poste Windows qui envoie les événements de sécuritéServeurs LinuxVia Filebeat - lit directement les fichiers de logs dans /var/log/Switches / RouteursVia Syslog - les équipements réseau envoient leurs logs en UDP sur le port 514Vers OpenSearchFilebeat reçoit tout et envoie vers 192.168.0.101:9200 (Nikita)
-Accès et informations
-InformationValeurCT ProxmoxCT 100IP du CT192.168.0.100Accès Proxmoxhttps://con4mity.duckdns.org:33000Login Proxmoxkylian ou kylian@pve - choisir pve dans le menu RealmMot de passe ProxmoxKylian@@Accès au CTDans Proxmox : cliquer sur CT 100 → Console, ou Shell Proxmox → pct enter 100Dossier projet/opt/con4mity/OpenSearch (Nikita)http://192.168.0.101:9200PostgreSQL (BDD)192.168.0.104 - port 5432 - user: con4mity / mdp: Con4mity2024
-Ce qui est déjà installé
-ÉlémentÉtatDockerInstallé et actif - commande : docker --versionDocker ComposeInstallé - commande : docker-compose --versionOpenSearchTourne sur 192.168.0.101:9200 - prêt à recevoir des logsPostgreSQLTourne sur 192.168.0.104:5432 - base et tables crééesRéseauTous les CTs se voient - tester avec ping 192.168.0.101
-Outils utilisés
-Filebeat
-Agent léger développé par Elastic. Il lit les fichiers de logs sur les machines Linux, reçoit les logs Windows via Winlogbeat, et envoie tout vers OpenSearch. Il se configure via un fichier filebeat.yml. C'est lui qui filtre à la source - on définit exactement quels fichiers lire et quels champs garder.
-Filebeat tourne dans un conteneur Docker sur le CT 100. Il est configuré pour pointer vers OpenSearch à l'adresse 192.168.0.101:9200.
-
-Syslog-ng
-Serveur Syslog qui reçoit les logs réseau. Les switches, routeurs et pare-feu ne peuvent pas installer un agent - ils utilisent le protocole Syslog standard pour envoyer leurs logs. Syslog-ng écoute sur le port 514 UDP, reçoit ces logs, et les transmet à Filebeat.
-
-Docker et Docker Compose
-Docker permet de faire tourner des applications dans des conteneurs isolés. Docker Compose orchestre plusieurs conteneurs à partir d'un fichier de configuration. Toute la configuration de Filebeat sera dans un fichier docker-compose.yml - une seule commande pour tout lancer, tout arrêter, tout relancer.
-
-Missions
-Voici les missions dans l'ordre. Chaque mission a une explication de pourquoi elle est nécessaire, et ce qu'il faut concrètement faire.
-
-Mission 1  -  Créer la structure du projet
-Pourquoi : 
-Tous les fichiers du projet doivent être dans /opt/con4mity/ pour être cohérents avec les autres membres. Filebeat a besoin d'un dossier config/ pour son fichier de configuration.
-Ce qu'il faut faire :
-• Se connecter au CT 100 : pct enter 100 depuis le shell Proxmox
-• Créer le dossier principal : mkdir -p /opt/con4mity/config
-• Se placer dans ce dossier : cd /opt/con4mity
-• Vérifier que Docker tourne : docker --version et systemctl status docker
-Mission 2  -  Configurer Filebeat
-Pourquoi : 
-Le fichier filebeat.yml dit à Filebeat quoi collecter et où envoyer. Sans lui, Filebeat ne sait pas quels logs lire ni où les envoyer. C'est la configuration la plus importante de cette brique.
-Ce qu'il faut faire :
-• Créer le fichier /opt/con4mity/config/filebeat.yml
-• Dans ce fichier, définir les sources de logs à collecter : les fichiers dans /var/log/*.log et /var/log/syslog pour Linux, et le port 514 UDP pour les logs réseau Syslog
-• Définir la destination : OpenSearch à l'adresse http://192.168.0.101:9200
-• Définir le nom de l'index : con4mity-logs-{date} - OpenSearch créera un index par jour automatiquement
-• Ajouter un champ source_type pour distinguer les logs Linux des logs réseau
-• Ne pas activer la collecte de logs non pertinents (logs de débogage, logs applicatifs) - on veut uniquement les événements de sécurité
-Mission 3  -  Créer le docker-compose.yml
-Pourquoi : 
-Le docker-compose.yml est le fichier qui dit à Docker comment lancer Filebeat. Il définit l'image à utiliser, les volumes à monter, et les ports à exposer. C'est ce fichier qui permettra de tout lancer d'une seule commande.
-Ce qu'il faut faire :
-• Créer le fichier /opt/con4mity/docker-compose.yml
-• Définir un service filebeat qui utilise l'image elastic/filebeat:8.11.0
-• Monter le fichier de configuration filebeat.yml en lecture dans le conteneur
-• Monter le dossier /var/log en lecture seule pour que Filebeat puisse lire les logs système
-• Exposer le port 514 en UDP pour recevoir les logs Syslog des équipements réseau
-• Ajouter restart: unless-stopped pour que le service redémarre automatiquement en cas de crash
-• Limiter la RAM du conteneur à 256 Mo - Filebeat est léger et n'a pas besoin de plus
-Mission 4  -  Lancer Filebeat et vérifier
-Pourquoi : 
-Lancer le service et s'assurer qu'il démarre sans erreur. Les logs du conteneur vont indiquer si Filebeat se connecte bien à OpenSearch ou s'il y a un problème de configuration.
-Ce qu'il faut faire :
-• Lancer le service : docker-compose up -d depuis /opt/con4mity/
-• Vérifier que le conteneur tourne : docker-compose ps - l'état doit être Up
-• Consulter les logs du conteneur : docker-compose logs -f - chercher des erreurs en rouge
-• Si Filebeat dit 'connection refused' vers OpenSearch, vérifier que le CT 101 est bien accessible : ping 192.168.0.101
-• Si Filebeat dit 'permission denied', vérifier que le fichier filebeat.yml a les bonnes permissions
-Mission 5  -  Valider que les logs arrivent dans OpenSearch
-Pourquoi : 
-C'est la validation finale. Si les logs apparaissent dans OpenSearch, la collecte fonctionne. C'est aussi le moment de vérifier que le filtrage est bien en place - on ne doit pas voir des centaines de logs sans intérêt.
-Ce qu'il faut faire :
-• Interroger l'API d'OpenSearch pour voir les index créés : curl http://192.168.0.101:9200/_cat/indices?v
-• Un index con4mity-logs-AAAA.MM.JJ doit apparaître dans la liste
-• Envoyer un log de test depuis la ligne de commande Linux : logger 'test con4mity kylian'
-• Vérifier que ce log apparaît dans OpenSearch : curl http://192.168.0.101:9200/con4mity-logs-*/_search?pretty
-• Vérifier que le volume de logs est raisonnable - quelques centaines d'événements par heure maximum en situation normale
-Mission 6  -  Configurer la collecte Windows (Winlogbeat)
-Pourquoi : 
-La majorité des PME ont des postes Windows. Winlogbeat est l'agent qui collecte les événements de sécurité Windows et les envoie vers notre Pi. Sans ça, on ne surveille que les machines Linux.
-Ce qu'il faut faire :
-• Télécharger Winlogbeat sur le site d'Elastic (version 8.11.0 pour rester cohérent avec Filebeat)
-• L'installer sur une machine Windows de test
-• Configurer winlogbeat.yml pour pointer vers l'IP du Pi (192.168.0.100:5044) ou directement vers OpenSearch (192.168.0.101:9200)
-• Définir les canaux Windows à surveiller : Security (obligatoire), System, Application
-• Vérifier que les événements Windows apparaissent dans OpenSearch avec le type source winlogbeat
-• Documenter la procédure d'installation de Winlogbeat pour pouvoir la répliquer facilement chez un client
-Mission 7  -  Documenter la configuration
-Pourquoi : 
-La documentation est indispensable pour la maintenance. Si Filebeat plante dans 6 mois, il faut pouvoir comprendre rapidement ce qui a été configuré et pourquoi, sans avoir à tout recommencer.
-Ce qu'il faut faire :
-• Créer un fichier README.md dans /opt/con4mity/
-• Expliquer comment lancer le service (docker-compose up -d)
-• Expliquer comment consulter les logs du service (docker-compose logs -f)
-• Expliquer comment arrêter et redémarrer (docker-compose down puis up -d)
-• Expliquer ce que fait chaque ligne du fichier filebeat.yml
-• Lister les problèmes déjà rencontrés et leurs solutions
-Con4mity · Fiche Kylian · Collecte & Pipeline · OTERIA 2025-2026
-

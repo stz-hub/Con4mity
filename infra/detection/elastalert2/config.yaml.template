@@ -1,7 +1,7 @@
 es_host: {{OPENSEARCH_HOST}}
 es_port: {{OPENSEARCH_PORT}}
 use_ssl: false
-rules_folder: /opt/elastalert/rules/active
+rules_folder: /tmp/rules-rendered
 run_every:
   minutes: 1
 buffer_time:
