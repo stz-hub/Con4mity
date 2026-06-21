@@ -6,7 +6,7 @@
  * - accès direct : http://hôte:8001/…        → API = http://hôte:8001/api
  *
  * Surcharge manuelle (avant chargement de ce script) :
- *   window.CON4MITY_API_BASE = "http://con4mity.duckdns.org:33005/api";
+ *   window.CON4MITY_API_BASE = "/api";
  */
 /** Origine utilisable pour fetch() — 0.0.0.0 en hôte de page refuse souvent la connexion côté navigateur. */
 function effectiveApiOrigin() {
@@ -19,7 +19,7 @@ function effectiveApiOrigin() {
 
 function discoverApiBase() {
   if (typeof window === "undefined" || !window.location) {
-    return "http://con4mity.duckdns.org:33005/api";
+    return "/api";
   }
   if (window.CON4MITY_API_BASE) {
     return String(window.CON4MITY_API_BASE).replace(/\/$/, "");

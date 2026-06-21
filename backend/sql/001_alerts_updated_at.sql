@@ -1,5 +1,5 @@
 -- À exécuter sur PostgreSQL (CT 104), une fois, avec un user qui a les droits sur con4mity.
--- Exemple : psql -h 192.168.0.104 -U con4mity -d con4mity -f 001_alerts_updated_at.sql
+-- Exemple : psql -h localhost -U con4mity -d con4mity -f 001_alerts_updated_at.sql
 
 ALTER TABLE alerts
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;

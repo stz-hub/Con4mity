@@ -1,6 +1,6 @@
 # Con4mity — guide de démarrage rapide
 
-Ce fichier résume **l’accès à l’éditeur**, **le lancement du backend + front**, le **changement de port**, et les **étapes PostgreSQL / OpenSearch** utiles. Les mots de passe et URLs sensibles restent dans **`CON4MITY_SECRETS.md`** (fichier local, à ne pas commiter).
+Ce fichier résume **l’accès à l’éditeur**, **le lancement du backend + front**, le **changement de port**, et les **étapes PostgreSQL / OpenSearch** utiles. Les mots de passe et URLs sensibles restent dans **`vos notes privees (hors depot)`** (fichier local, à ne pas commiter).
 
 ---
 
@@ -14,7 +14,7 @@ Ce fichier résume **l’accès à l’éditeur**, **le lancement du backend + f
 
 ### Liens utiles
 
-- **code-server** (VS Code dans le navigateur) : URL et mot de passe documentés dans **`CON4MITY_SECRETS.md`** (ex. instance DuckDNS sur un port dédié).
+- **code-server** (VS Code dans le navigateur) : URL et mot de passe documentés dans **`vos notes privees (hors depot)`** (ex. instance un hote distant sur un port dédié).
 - **Télécharger VS Code** : [https://code.visualstudio.com/](https://code.visualstudio.com/)
 - **VS Code Web (GitHub)** : [https://vscode.dev/](https://vscode.dev/)
 

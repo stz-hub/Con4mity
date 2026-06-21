@@ -11,5 +11,5 @@ docker-compose up -d
 ## Vérification
 ```bash
 docker-compose logs -f fluentbit
-curl http://192.168.0.101:9200/_cat/indices?v
+curl http://OPENSEARCH_HOST:9200/_cat/indices?v
 ```
