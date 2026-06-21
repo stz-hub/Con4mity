@@ -1,9 +1,11 @@
+# OpenSearch Dashboards (UI de visualisation) — OPTIONNEL.
+# La stack complete (OpenSearch + Fluent Bit + ElastAlert2) est dans infra/docker-compose.test.yml.
 version: '3.8'
 services:
   dashboards:
     image: opensearchproject/opensearch-dashboards:2.11.0
     environment:
-      - OPENSEARCH_HOSTS=http://192.168.0.101:9200
+      - OPENSEARCH_HOSTS=http://${OPENSEARCH_HOST:-opensearch}:9200
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
     ports:
       - "5601:5601"
