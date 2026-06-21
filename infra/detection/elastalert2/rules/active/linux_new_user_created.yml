@@ -3,21 +3,10 @@ filter:
 - query:
     query_string:
       query: message:(*useradd\:\ new\ user* OR *new\ user\ added* OR *adduser*)
-index: con4mity-logs-*
 name: new user created
 priority: 3
 type: any
-timestamp_field: '@timestamp'
+severity: high
+index: con4mity-logs-*
 alert:
 - post
-http_post_url: http://__DASHBOARD__/api/webhook/alert
-http_post_headers:
-  X-Webhook-Token: __TOKEN__
-  Content-Type: application/json
-http_post_static_payload:
-  rule_name: new user created
-  severity: high
-http_post_payload:
-  host: host
-realert:
-  minutes: 1

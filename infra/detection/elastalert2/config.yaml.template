@@ -9,3 +9,18 @@ buffer_time:
 writeback_index: elastalert_status
 alert_time_limit:
   days: 2
+
+# --- Webhook CON4MITY en GLOBAL (herite par toutes les regles). alert/index restent par regle. ---
+http_post_url: "http://__DASHBOARD__/api/webhook/alert"
+http_post_headers:
+  X-Webhook-Token: "__TOKEN__"
+  Content-Type: application/json
+include_rule_params_in_matches:
+  - name
+  - severity
+http_post_payload:
+  rule_name: rule_param_name
+  severity: rule_param_severity
+  host: host
+realert:
+  minutes: 1
