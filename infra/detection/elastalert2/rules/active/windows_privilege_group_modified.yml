@@ -1,3 +1,4 @@
+# MITRE ATT&CK: T1098 (Privilege Escalation)
 description: Détection de modification d'un groupe à privilèges dans l'AD
 filter:
 - query:

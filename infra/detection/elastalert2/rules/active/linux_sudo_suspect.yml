@@ -1,3 +1,4 @@
+# MITRE ATT&CK: T1548.003 (Privilege Escalation)
 description: Détection de toute utilisation sudo suspecte
 filter:
 - query:

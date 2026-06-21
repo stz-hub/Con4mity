@@ -1,3 +1,4 @@
+# MITRE ATT&CK: T1485/T1486 (Impact)
 name: Mass File Deletion or Encryption (Impact)
 description: Detection ransomware - suppression ou chiffrement de masse de fichiers (T1485/T1486)
 type: frequency

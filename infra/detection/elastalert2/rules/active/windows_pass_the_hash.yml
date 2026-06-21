@@ -1,3 +1,4 @@
+# MITRE ATT&CK: T1550.002 (Lateral Movement)
 description: Détection d'une tentative de Pass-the-Hash via authentification NTLM
   suspecte
 filter:

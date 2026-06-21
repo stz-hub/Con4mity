@@ -1,3 +1,4 @@
+# MITRE ATT&CK: T1490 (Impact)
 name: Shadow Copy Deletion (Inhibit Recovery)
 description: Detection ransomware - suppression des shadow copies / inhibition recovery (T1490)
 type: any

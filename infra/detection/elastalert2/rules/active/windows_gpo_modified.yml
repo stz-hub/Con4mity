@@ -1,3 +1,4 @@
+# MITRE ATT&CK: T1484.001 (Privilege Escalation)
 description: Détection de modification d'une stratégie de groupe (GPO)
 filter:
 - query:

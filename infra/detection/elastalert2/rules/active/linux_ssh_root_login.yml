@@ -1,3 +1,4 @@
+# MITRE ATT&CK: T1021.004 + T1078 (Lateral Movement)
 description: Détection de tentatives de connexions SSH Root (échouées et réussies)
 filter:
 - query:
