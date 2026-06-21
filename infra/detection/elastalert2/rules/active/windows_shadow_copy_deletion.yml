@@ -1,0 +1,13 @@
+name: Shadow Copy Deletion (Inhibit Recovery)
+description: Detection ransomware - suppression des shadow copies / inhibition recovery (T1490)
+type: any
+filter:
+- query:
+    query_string:
+      query: message:(vssadmin\ delete\ shadows OR wbadmin\ delete\ catalog OR Disable-ComputerRestore OR bcdedit)
+severity: critical
+index: con4mity-logs-*
+alert:
+- post
+realert:
+  minutes: 1

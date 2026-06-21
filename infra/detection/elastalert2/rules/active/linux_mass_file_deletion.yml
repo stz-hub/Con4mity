@@ -1,0 +1,17 @@
+name: Mass File Deletion or Encryption (Impact)
+description: Detection ransomware - suppression ou chiffrement de masse de fichiers (T1485/T1486)
+type: frequency
+num_events: 50
+timeframe:
+  minutes: 2
+query_key: host
+filter:
+- query:
+    query_string:
+      query: message:(unlink OR rename OR encrypted OR locked OR crypt)
+severity: critical
+index: con4mity-logs-*
+alert:
+- post
+realert:
+  minutes: 5
