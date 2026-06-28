@@ -1,0 +1,19 @@
+{
+  "description" : "Aplatit les champs ECS de Winlogbeat (winlog.event_id, winlog.event_data.*) vers les noms plats attendus par les regles ElastAlert2 (EventID, LogonType, TargetUserName, ...)",
+  "processors" : [
+    { "set": { "field": "EventID", "copy_from": "winlog.event_id", "ignore_failure": true } },
+    { "set": { "field": "LogonType", "copy_from": "winlog.event_data.LogonType", "ignore_failure": true } },
+    { "set": { "field": "SubStatus", "copy_from": "winlog.event_data.SubStatus", "ignore_failure": true } },
+    { "set": { "field": "TargetUserName", "copy_from": "winlog.event_data.TargetUserName", "ignore_failure": true } },
+    { "set": { "field": "AuthenticationPackageName", "copy_from": "winlog.event_data.AuthenticationPackageName", "ignore_failure": true } },
+    { "set": { "field": "TicketEncryptionType", "copy_from": "winlog.event_data.TicketEncryptionType", "ignore_failure": true } },
+    { "set": { "field": "ServiceName", "copy_from": "winlog.event_data.ServiceName", "ignore_failure": true } },
+    { "set": { "field": "GroupName", "copy_from": "winlog.event_data.GroupName", "ignore_failure": true } },
+    { "set": { "field": "ClassName", "copy_from": "winlog.event_data.ClassName", "ignore_failure": true } },
+    { "set": { "field": "ObjectClass", "copy_from": "winlog.event_data.ObjectClass", "ignore_failure": true } },
+    { "set": { "field": "TaskContent", "copy_from": "winlog.event_data.TaskContentNew", "ignore_failure": true } },
+    { "set": { "field": "ScriptBlockText", "copy_from": "winlog.event_data.ScriptBlockText", "ignore_failure": true } },
+    { "set": { "field": "IpAddress", "copy_from": "winlog.event_data.IpAddress", "ignore_failure": true } },
+    { "set": { "field": "host.name", "copy_from": "agent.hostname", "ignore_failure": true, "override": false } }
+  ]
+}

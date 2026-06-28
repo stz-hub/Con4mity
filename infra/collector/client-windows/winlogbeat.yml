@@ -1,0 +1,36 @@
+# Con4mity — Winlogbeat (postes/serveurs Windows clients)
+# Service natif Windows (pas de conteneur). A copier sur chaque machine, adapter
+# OPENSEARCH_HOST puis installer comme service (cf README.md du dossier).
+#
+# Canaux choisis pour couvrir les 18 regles actives dans
+# infra/detection/elastalert2/rules/active/windows_*.yml
+
+winlogbeat.event_logs:
+  - name: Security
+    event_id: 4624, 4625, 4698, 4720, 4728, 4732, 4740, 4756, 4769, 5136, 5137, 5141, 6416
+
+  - name: System
+
+  - name: Application
+
+  - name: Microsoft-Windows-Windows Defender/Operational
+
+  - name: Microsoft-Windows-Windows Firewall With Advanced Security/Firewall
+
+  - name: Microsoft-Windows-PowerShell/Operational
+    event_id: 4104
+
+fields:
+  source_type: windows
+
+output.elasticsearch:
+  hosts: ["http://${OPENSEARCH_HOST}:9200"]
+  index: "con4mity-logs-%{+yyyy.MM.dd}"
+  pipeline: "con4mity-windows-parse"
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: C:\ProgramData\winlogbeat\logs
+  name: winlogbeat
+  keepfiles: 7
