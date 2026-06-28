@@ -1,29 +1,27 @@
 {
-  "con4mity-auth-parse" : {
-    "description" : "Parse auth.log fields - SSH, sudo, user management, privilege escalation",
-    "processors" : [
-      {
-        "grok" : {
-          "field" : "message",
-          "patterns" : [
-            "Failed password for %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
-            "Failed password for invalid user %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
-            "Invalid user %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
-            "Accepted password for %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
-            "Accepted publickey for %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
-            "session opened for user %{WORD:user.name} by",
-            "session closed for user %{WORD:user.name}",
-            "sudo: %{WORD:user.name} : TTY=%{WORD:sudo.tty} ; PWD=%{DATA:sudo.pwd} ; USER=%{WORD:sudo.user} ; COMMAND=%{GREEDYDATA:sudo.command}",
-            "sudo: %{WORD:user.name} : %{GREEDYDATA:sudo_message}",
-            "new user: name=%{WORD:user.name}",
-            "useradd.*name=%{WORD:user.name}",
-            "passwd: password %{WORD:passwd.action} for %{WORD:user.name}",
-            "su: %{GREEDYDATA:su.message} for user %{WORD:user.name}",
-            "%{WORD:user.name} : user NOT in sudoers"
-          ],
-          "ignore_failure" : true
-        }
+  "description" : "Parse auth.log fields - SSH, sudo, user management, privilege escalation",
+  "processors" : [
+    {
+      "grok" : {
+        "field" : "message",
+        "patterns" : [
+          "Failed password for %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
+          "Failed password for invalid user %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
+          "Invalid user %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
+          "Accepted password for %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
+          "Accepted publickey for %{WORD:user.name} from %{IP:source.ip} port %{NUMBER:source.port}",
+          "session opened for user %{WORD:user.name} by",
+          "session closed for user %{WORD:user.name}",
+          "sudo: %{WORD:user.name} : TTY=%{WORD:sudo.tty} ; PWD=%{DATA:sudo.pwd} ; USER=%{WORD:sudo.user} ; COMMAND=%{GREEDYDATA:sudo.command}",
+          "sudo: %{WORD:user.name} : %{GREEDYDATA:sudo_message}",
+          "new user: name=%{WORD:user.name}",
+          "useradd.*name=%{WORD:user.name}",
+          "passwd: password %{WORD:passwd.action} for %{WORD:user.name}",
+          "su: %{GREEDYDATA:su.message} for user %{WORD:user.name}",
+          "%{WORD:user.name} : user NOT in sudoers"
+        ],
+        "ignore_failure" : true
       }
-    ]
-  }
+    }
+  ]
 }

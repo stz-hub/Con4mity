@@ -45,13 +45,32 @@ for f in "$ACTIVE_DIR"/*.yml; do
 done
 echo "   Variables injectees dans $(ls $ACTIVE_DIR/*.yml | wc -l) regles"
 
-# 5 Appliquer le pipeline grok
+# Applique un pipeline d'ingestion et verifie le code HTTP (sinon echec silencieux)
+apply_pipeline() {
+	local name="$1" file="$2"
+	local resp_body http_code
+	resp_body="$(mktemp)"
+	http_code=$(curl -s -o "$resp_body" -w "%{http_code}" -X PUT \
+		"http://${OPENSEARCH_HOST}:${OPENSEARCH_PORT}/_ingest/pipeline/${name}" \
+		-H "Content-Type: application/json" \
+		-d @"$file")
+	if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+		echo "ERREUR pipeline ${name} (HTTP ${http_code}) :"
+		cat "$resp_body"
+		rm -f "$resp_body"
+		exit 1
+	fi
+	rm -f "$resp_body"
+	echo "Pipeline ${name} applique (HTTP ${http_code})"
+}
+
+# 5 Appliquer le pipeline grok (Linux auth.log)
 echo "5. Application pipeline grok..."
-curl -s -X PUT \
-	"http://${OPENSEARCH_HOST}:${OPENSEARCH_PORT}/_ingest/pipeline/con4mity-auth-parse" \
-	-H "Content-Type: application/json" \
-	-d @"$SCRIPT_DIR/../pipelines/pipeline-grok.json" > /dev/null
-echo "Pipeline grok applique"
+apply_pipeline "con4mity-auth-parse" "$SCRIPT_DIR/../pipelines/pipeline-grok.json"
+
+# 6 Appliquer le pipeline Windows (aplatissement champs ECS Winlogbeat)
+echo "6. Application pipeline Windows..."
+apply_pipeline "con4mity-windows-parse" "$SCRIPT_DIR/../pipelines/pipeline-windows.json"
 
 echo ""
 echo "=== Deploiement termine : $(ls $ACTIVE_DIR/*.yml | wc -l) regles actives ==="
