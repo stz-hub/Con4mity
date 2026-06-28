@@ -1,12 +1,11 @@
 # OpenSearch
 
-Moteur de stockage et de recherche full-text. Heap configuré à 3 Go pour Pi 5 8 Go.
+Moteur de stockage et de recherche full-text. Heap configurable via `OS_JAVA_OPTS`
+dans le `.env` racine (3g recommandé pour Pi 5 8 Go).
 Sécurité désactivée en dev (DISABLE_SECURITY_PLUGIN=true). À activer en prod.
 
 ## Déploiement
-```bash
-docker-compose up -d
-```
+Voir le `docker-compose.yml` à la racine du repo — service `opensearch`.
 
 ## Vérification
 ```bash
