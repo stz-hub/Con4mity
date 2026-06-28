@@ -1,0 +1,14 @@
+services:
+  fluentbit:
+    image: fluent/fluent-bit:latest
+    user: root
+    environment:
+      - FLB_HOSTNAME=${CLIENT_HOSTNAME:-linux-client}
+      - PI_HOST=${PI_HOST}
+    volumes:
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - /var/log:/var/log:ro
+      - /tmp/flb:/tmp
+    command: /fluent-bit/bin/fluent-bit -c /fluent-bit/etc/fluent-bit.conf -R /fluent-bit/etc/parsers.conf
+    restart: unless-stopped
