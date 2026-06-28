@@ -1,12 +1,136 @@
-# OpenSearch Dashboards (UI de visualisation) — OPTIONNEL.
-# La stack complete (OpenSearch + Fluent Bit + ElastAlert2) est dans infra/docker-compose.test.yml.
-version: '3.8'
 services:
+
+  # ── Stockage ──────────────────────────────────────────────────────────────
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_JAVA_OPTS=${OS_JAVA_OPTS:--Xms1g -Xmx1g}
+      - DISABLE_SECURITY_PLUGIN=true
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    networks:
+      - con4mity
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=${PG_NAME:-con4mity}
+      - POSTGRES_USER=${PG_USER:-con4mity}
+      - POSTGRES_PASSWORD=${PG_PASSWORD}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - con4mity
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-con4mity}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend + frontend ────────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - PG_HOST=postgres
+      - PG_NAME=${PG_NAME:-con4mity}
+      - PG_USER=${PG_USER:-con4mity}
+      - PG_PASSWORD=${PG_PASSWORD}
+      - OS_HOST=opensearch
+      - OS_PORT=9200
+      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN}
+      - FRONTEND_DIR=/frontend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./frontend:/frontend:ro
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - con4mity
+    restart: unless-stopped
+
+  # ── Collecte logs Pi + réception clients/réseau ──────────────────────────
+  fluentbit:
+    image: fluent/fluent-bit:latest
+    user: root
+    environment:
+      - FLB_HOSTNAME=${COLLECTOR_HOSTNAME:-con4mity-pi}
+      - OPENSEARCH_HOST=opensearch
+    volumes:
+      - ./infra/collector/pi/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./infra/collector/pi/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - /var/log:/var/log:ro
+      - /tmp/flb:/tmp
+    ports:
+      - "514:514/udp"
+      - "24224:24224"
+      - "2020:2020"
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    networks:
+      - con4mity
+    restart: unless-stopped
+
+  # ── Détection ─────────────────────────────────────────────────────────────
+  elastalert:
+    image: jertel/elastalert2:latest
+    environment:
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+      - DASHBOARD_IP=backend
+      - DASHBOARD_PORT=8000
+      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN}
+    volumes:
+      - ./infra/detection/elastalert2/config.yaml.template:/opt/elastalert/config.yaml.template:ro
+      - ./infra/detection/elastalert2/entrypoint.sh:/opt/elastalert/entrypoint.sh:ro
+      - ./infra/detection/elastalert2/rules/active:/opt/elastalert/rules/active:ro
+    entrypoint: ["/bin/sh", "/opt/elastalert/entrypoint.sh"]
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - con4mity
+    restart: unless-stopped
+
+  # ── Optionnel : OpenSearch Dashboards (debug uniquement) ──────────────────
   dashboards:
     image: opensearchproject/opensearch-dashboards:2.11.0
     environment:
-      - OPENSEARCH_HOSTS=http://${OPENSEARCH_HOST:-opensearch}:9200
+      - OPENSEARCH_HOSTS=http://opensearch:9200
       - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
     ports:
       - "5601:5601"
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    networks:
+      - con4mity
     restart: unless-stopped
+    profiles:
+      - debug
+
+networks:
+  con4mity:
+    driver: bridge
+
+volumes:
+  opensearch-data:
+  pg-data:
