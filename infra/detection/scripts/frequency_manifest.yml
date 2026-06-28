@@ -1,0 +1,82 @@
+# Paramètres ElastAlert2 injectés après conversion pySigma.
+# Seules les règles listées ici sont modifiées ; les autres gardent type: any.
+#
+# Champs supportés : type, num_events, timeframe, query_key, realert
+# Règles marquées "CORRELATEUR" nécessitent une logique multi-événements
+# non réalisable via ElastAlert2 seul — à implémenter dans correlator.py.
+
+# ── Linux ──────────────────────────────────────────────────────────────────
+
+linux_ssh_brute_force.yml:
+  type: frequency
+  num_events: 5
+  timeframe:
+    minutes: 1
+  query_key: source.ip
+  realert:
+    minutes: 5
+
+linux_port_scan.yml:
+  type: frequency
+  num_events: 20
+  timeframe:
+    minutes: 30
+  realert:
+    minutes: 15
+
+# Connexion SSH hors-horaires : one-shot mais bruyant — realert 1h pour éviter
+# une alerte par connexion lors d'une intervention de nuit.
+linux_ssh_off_hours.yml:
+  realert:
+    minutes: 60
+
+# ── Windows pme-simple ─────────────────────────────────────────────────────
+
+windows_rdp_brute_force.yml:
+  type: frequency
+  num_events: 5
+  timeframe:
+    minutes: 1
+  query_key: IpAddress
+  realert:
+    minutes: 5
+
+# CORRELATEUR — nécessite : N échecs (4625) PUIS 1 succès (4624) même utilisateur
+# dans la même fenêtre. ElastAlert2 ne peut pas corréler deux types d'événements.
+# En attendant : realert 5 min pour limiter le bruit sur les succès seuls.
+windows_login_after_failures.yml:
+  realert:
+    minutes: 5
+
+# ── Windows pme-moyenne ────────────────────────────────────────────────────
+
+# Verrouillage de compte : EventID 4740 est déjà émis par Windows après N échecs.
+# Plusieurs lockouts sur des comptes différents en peu de temps = spray attack.
+windows_account_lockout.yml:
+  type: frequency
+  num_events: 3
+  timeframe:
+    minutes: 5
+  query_key: TargetUserName
+  realert:
+    minutes: 30
+
+# Kerberoasting : une seule demande RC4 peut être légitime. 3+ en 5 min = outillé.
+windows_kerberoasting.yml:
+  type: frequency
+  num_events: 3
+  timeframe:
+    minutes: 5
+  query_key: TargetUserName
+  realert:
+    minutes: 30
+
+windows_lateral_movement.yml:
+  realert:
+    minutes: 10
+
+# CORRELATEUR — nécessite : EventID 4720 (création user) PUIS 4732 (ajout admin)
+# dans la même fenêtre temporelle pour le même utilisateur cible.
+windows_new_admin_account.yml:
+  realert:
+    minutes: 5

@@ -21,3 +21,6 @@ for profile in linux/ windows/pme-simple windows/pme-moyenne; do
 	 done
 done
 echo "Termine: $(ls $ACTIVE_DIR/*.yml | wc -l) regles generees"
+
+bash "$SCRIPT_DIR/fix_severity.sh"
+bash "$SCRIPT_DIR/add_frequency.sh"
