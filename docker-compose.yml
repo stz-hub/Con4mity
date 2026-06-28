@@ -1,6 +1,14 @@
+# Stack "sonde" (Raspberry Pi côté client) — modèle MSSP, cf. docs/ARCHITECTURE.md.
+# Le central (OpenSearch sécu, backend, PostgreSQL, dashboard) tourne séparément
+# sur le Proxmox et n'est PAS déployé par ce fichier.
+#
+# Périmètre ici : collecte locale + stockage local 90j + détection de secours
+# (si la sonde est coupée du central). Les alertes de secours partent vers le
+# webhook du central via CENTRAL_DASHBOARD_HOST/PORT (tunnel WireGuard).
+
 services:
 
-  # ── Stockage ──────────────────────────────────────────────────────────────
+  # ── Stockage local (rétention 90j) ───────────────────────────────────────
   opensearch:
     image: opensearchproject/opensearch:2.11.0
     environment:
@@ -20,49 +28,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
-
-  postgres:
-    image: postgres:15
-    environment:
-      - POSTGRES_DB=${PG_NAME:-con4mity}
-      - POSTGRES_USER=${PG_USER:-con4mity}
-      - POSTGRES_PASSWORD=${PG_PASSWORD}
-    volumes:
-      - pg-data:/var/lib/postgresql/data
-    networks:
-      - con4mity
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-con4mity}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ── Backend + frontend ────────────────────────────────────────────────────
-  backend:
-    build: ./backend
-    environment:
-      - JWT_SECRET=${JWT_SECRET}
-      - PG_HOST=postgres
-      - PG_NAME=${PG_NAME:-con4mity}
-      - PG_USER=${PG_USER:-con4mity}
-      - PG_PASSWORD=${PG_PASSWORD}
-      - OS_HOST=opensearch
-      - OS_PORT=9200
-      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN}
-      - FRONTEND_DIR=/frontend
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./frontend:/frontend:ro
-    depends_on:
-      opensearch:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    networks:
-      - con4mity
-    restart: unless-stopped
 
   # ── Collecte logs Pi + réception clients/réseau ──────────────────────────
   fluentbit:
@@ -87,14 +52,14 @@ services:
       - con4mity
     restart: unless-stopped
 
-  # ── Détection ─────────────────────────────────────────────────────────────
+  # ── Détection locale de secours (si tunnel vers le central coupé) ────────
   elastalert:
     image: jertel/elastalert2:latest
     environment:
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
-      - DASHBOARD_IP=backend
-      - DASHBOARD_PORT=8000
+      - DASHBOARD_IP=${CENTRAL_DASHBOARD_HOST}
+      - DASHBOARD_PORT=${CENTRAL_DASHBOARD_PORT:-8000}
       - WEBHOOK_TOKEN=${WEBHOOK_TOKEN}
     volumes:
       - ./infra/detection/elastalert2/config.yaml.template:/opt/elastalert/config.yaml.template:ro
@@ -104,28 +69,9 @@ services:
     depends_on:
       opensearch:
         condition: service_healthy
-      backend:
-        condition: service_started
     networks:
       - con4mity
     restart: unless-stopped
-
-  # ── Optionnel : OpenSearch Dashboards (debug uniquement) ──────────────────
-  dashboards:
-    image: opensearchproject/opensearch-dashboards:2.11.0
-    environment:
-      - OPENSEARCH_HOSTS=http://opensearch:9200
-      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
-    ports:
-      - "5601:5601"
-    depends_on:
-      opensearch:
-        condition: service_healthy
-    networks:
-      - con4mity
-    restart: unless-stopped
-    profiles:
-      - debug
 
 networks:
   con4mity:
@@ -133,4 +79,3 @@ networks:
 
 volumes:
   opensearch-data:
-  pg-data:
